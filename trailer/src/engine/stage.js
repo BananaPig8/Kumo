@@ -30,7 +30,9 @@ export class Stage {
       uniforms: { tBase: { value: this.tex }, tGlow: { value: this.gtex }, uGlowGain: { value: 3.0 } },
       vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
       fragmentShader: `uniform sampler2D tBase, tGlow; uniform float uGlowGain; varying vec2 vUv;
-        void main(){ vec3 c = texture2D(tBase, vUv).rgb + texture2D(tGlow, vUv).rgb * uGlowGain; gl_FragColor = vec4(c, 1.0); }`,
+        // El lienzo de luz llega sin premultiplicar: rgb × a es la luz real (si
+        // no, un halo suave se vería como un disco sólido de su color).
+        void main(){ vec4 l = texture2D(tGlow, vUv); vec3 c = texture2D(tBase, vUv).rgb + l.rgb * l.a * uGlowGain; gl_FragColor = vec4(c, 1.0); }`,
       depthTest: false, depthWrite: false,
     });
     this.scene = new THREE.Scene();

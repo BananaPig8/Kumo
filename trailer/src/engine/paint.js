@@ -656,8 +656,8 @@ export function paintWaterfall(g, x, y, w, h, t, { color = '#e8f6fb', alpha = 0.
   const rng = mulberry32(seed);
   g.save();
   const gr = g.createLinearGradient(0, y, 0, y + h);
-  gr.addColorStop(0, css('#bfe3ee', alpha * 0.85));
-  gr.addColorStop(0.7, css('#dff1f6', alpha * 0.5));
+  gr.addColorStop(0, css('#eaf7fb', alpha * 0.92));
+  gr.addColorStop(0.55, css('#e4f3f8', alpha * 0.6));
   gr.addColorStop(1, css('#ffffff', 0));
   g.fillStyle = gr;
   g.beginPath();
@@ -667,7 +667,14 @@ export function paintWaterfall(g, x, y, w, h, t, { color = '#e8f6fb', alpha = 0.
   g.lineTo(x - w * 0.9, y + h);
   g.closePath();
   g.fill();
-  const n = Math.round(w * 1.2);
+  // Volumen: los dos cantos del chorro algo más fríos.
+  for (const sd of [-1, 1]) {
+    const eg = g.createLinearGradient(0, y, 0, y + h * 0.8);
+    eg.addColorStop(0, css('#8fb9cc', alpha * 0.45)); eg.addColorStop(1, css('#8fb9cc', 0));
+    g.fillStyle = eg;
+    g.beginPath(); g.moveTo(x + sd * w * 0.5, y); g.lineTo(x + sd * w * 0.32, y); g.lineTo(x + sd * w * 0.6, y + h * 0.8); g.lineTo(x + sd * w * 0.82, y + h * 0.8); g.closePath(); g.fill();
+  }
+  const n = Math.round(w * 2);
   for (let i = 0; i < n; i++) {
     const fx = rng() - 0.5;
     const ph = rng();
@@ -923,6 +930,79 @@ export function drawMass(g, m, x, y, k = 1) {
   g.drawImage(m, x - ax * k, y - ay * k, m.width * k, m.height * k);
 }
 
+// Copa de árbol en grumos, como se pintan los árboles de Ghibli (el
+// alcanforero de Totoro): el mismo esqueleto fractal que los cúmulos, pero con
+// la rampa de hojas, bordes de hojarasca y la mitad de abajo en sombra.
+// Devuelve un lienzo anclado en el centro de la base.
+export function crownMass(rng, w, h, { pal = LEAF, light = [-0.5, -0.85, 0.45], seed = 1, haze = 0, hazeColor = '#d0e3ef', tower = 0.5, levels = 3, under = 0.42, clusters = 1 } = {}) {
+  const pad = Math.round(Math.max(w, h) * 0.14);
+  const cw = Math.ceil(w + pad * 2), ch = Math.ceil(h * 1.25 + pad * 2);
+  const base = ch - pad - h * 0.2;
+  const puffs = fractalPuffs(rng, w, h, { tower, levels }).map((p) => ({ x: cw / 2 + p.x, y: base + p.y, rx: p.r * 1.1, ry: p.r * 0.92, z: p.z * 0.7 }));
+  // Grumos que cuelgan por debajo (la copa no tiene base plana).
+  const nb = Math.max(3, Math.round(w / (h * 0.45)));
+  for (let i = 0; i < nb; i++) {
+    const f = (i + 0.5) / nb - 0.5;
+    const r = h * (0.16 + rng() * 0.1) * (1 - Math.abs(f) * 0.6);
+    puffs.push({ x: cw / 2 + f * w * 0.82 + (rng() - 0.5) * r * 0.4, y: base - r * 0.2 + rng() * h * 0.08, rx: r * 1.15, ry: r * 0.85, z: 0 });
+  }
+  const c = renderMass(cw, ch, puffs, {
+    light, ramp: leafRamp(pal, 2.4), sharpK: 3.2 / Math.max(10, h * 0.12), edgeAmp: 0.1, edgeFreq: 9 / Math.max(40, h),
+    leafy: 0.05, brushAmp: 0.07, brushFreq: 1.6 / Math.max(10, h * 0.1), brushStretch: 2, ao: 0.55, aoRadius: h * 0.05, aoRange: h * 0.06,
+    bump: 1.0, wrap: 0.2, seed, vertical: { top: base - h, bottom: base + h * 0.15, amount: under },
+    alphaEdge: 1 / Math.max(2, h * 0.012), haze: haze > 0 ? { color: hazeColor, amount: haze } : null,
+  });
+  painterly(c, { seed, size: Math.max(2.5, h * 0.018), alpha: 0.4, stretch: 1.6, soften: Math.max(0.5, h * 0.001), density: 1 });
+  if (clusters > 0) leafClusters(c, rng, { pal, light, r: Math.min(22, Math.max(3, h * 0.085)) * clusters, seed });
+  c.anchor = [cw / 2, base];
+  return c;
+}
+
+// Racimos de hojas sobre una copa ya sombreada, como en los árboles de
+// Ghibli: cada racimo es una roseta de hojitas con su sombra debajo, del
+// color que tiene la copa en ese punto (más claro hacia la luz). Los claros se
+// pintan los últimos para que destaquen; en el borde asoman y lo deshilachan.
+export function leafClusters(c, rng, { pal = LEAF, light = [-0.5, -0.85], r = 8, seed = 1, density = 1 } = {}) {
+  const w = c.width, h = c.height;
+  const g = c.getContext('2d');
+  const src = g.getImageData(0, 0, w, h).data;
+  let lx = light[0], ly = light[1];
+  const ll = Math.hypot(lx, ly) || 1; lx /= ll; ly /= ll;
+  const list = [];
+  const n = Math.round(w * h / (r * r * 2.4) * density);
+  for (let i = 0; i < n; i++) {
+    const x = rng() * w, y = rng() * h;
+    const o = (Math.floor(y) * w + Math.floor(x)) * 4;
+    if (src[o + 3] < 140) continue;
+    const col = [src[o], src[o + 1], src[o + 2]];
+    list.push({ x, y, col, lum: col[0] * 0.3 + col[1] * 0.55 + col[2] * 0.15, s: r * (0.7 + rng() * 0.6), a0: rng() * Math.PI * 2 });
+  }
+  list.sort((p, q) => p.lum - q.lum);
+  const leaf = (x, y, len, wd, ang, color, alpha) => {
+    g.fillStyle = css(color, alpha);
+    g.beginPath();
+    g.ellipse(x, y, len, wd, ang, 0, Math.PI * 2);
+    g.fill();
+  };
+  for (const p of list) {
+    const { x, y, s, col } = p;
+    const bright = Math.min(1, Math.max(0, (p.lum - 70) / 130));
+    // Sombra del racimo, desplazada lejos de la luz.
+    leaf(x - lx * s * 0.3, y - ly * s * 0.3, s * 0.95, s * 0.7, 0, mix(col, pal.deep, 0.45), 0.55);
+    // Roseta de hojas.
+    const k = 6 + Math.floor(rng() * 3);
+    for (let j = 0; j < k; j++) {
+      const a = p.a0 + (j / k) * Math.PI * 2 + (rng() - 0.5) * 0.4;
+      const d = s * (0.35 + rng() * 0.25);
+      const towards = Math.cos(a) * lx + Math.sin(a) * ly;
+      const cc = towards > 0.2 ? mix(col, pal.hi, 0.18 + 0.3 * bright) : towards < -0.3 ? mix(col, pal.deep, 0.2) : vary(col, rng, 0.05);
+      leaf(x + Math.cos(a) * d, y + Math.sin(a) * d, s * 0.42, s * 0.24, a, cc, 0.95);
+    }
+    // Brillo en el centro de los racimos al sol.
+    if (bright > 0.45) leaf(x + lx * s * 0.15, y + ly * s * 0.15, s * 0.3, s * 0.2, p.a0, mix(col, pal.hi, 0.55), 0.8 * bright);
+  }
+}
+
 // Copa de árbol como masa hojosa.
 export function canopyMass(rng, rx, ry, { pal = LEAF, light = [0.5, -0.8, 0.6], clumps = 26, seed = 1, haze = 0, hazeColor = '#d0e3ef' } = {}) {
   const pad = Math.round(Math.max(rx, ry) * 0.3);
@@ -1073,18 +1153,19 @@ export function cloudSeaBillows(rng, w, h, { pal = CLOUD_DAY, light = [-0.5, -0.
   fl.addColorStop(horizon * 1.05, css(sky, 0));
   fl.addColorStop(Math.min(0.9, horizon * 1.9), css(sky, 0.7));
   fl.addColorStop(Math.min(0.95, horizon * 3.0), css(mix(sky, pal.mid, 0.55)));
-  fl.addColorStop(1, css(mix(pal.mid, pal.shade, 0.55)));
+  fl.addColorStop(1, css(mix(pal.shade, sky, 0.4)));
   g.fillStyle = fl;
   g.fillRect(0, 0, w, h);
   // Juego de cúmulos bajos y anchos (se reutilizan escalados y volteados).
   const kit = [];
   for (let i = 0; i < 7; i++) kit.push(cumulusMass(rng, 640, 170 + rng() * 50, { pal, light, tower: 0.25 + rng() * 0.25, seed: seed * 13 + i, levels: 2 }));
   const bigKit = [];
-  for (let i = 0; i < 3; i++) bigKit.push(cumulusMass(rng, 1000 * nearScale, 300 * nearScale, { pal, light, tower: 0.45, seed: seed * 17 + i, levels: 2 }));
+  for (let i = 0; i < 3; i++) bigKit.push(cumulusMass(rng, 1000 * nearScale, 300 * nearScale, { pal, light, tower: 0.45, seed: seed * 17 + i, levels: 3 }));
   const top0 = h * horizon;
   for (let r = 0; r < rows; r++) {
     const t = r / (rows - 1);
-    const yy = top0 + Math.pow(t, 1.55) * (h - top0) * 0.98;
+    // Las filas de delante bajan más allá del borde: sus bases no se ven.
+    const yy = top0 + Math.pow(t, 1.55) * (h - top0) * 1.12;
     const cw = lerp(w * 0.07, w * 0.5 * nearScale, Math.pow(t, 1.35));
     const row = makeCanvas(w, h);
     const rg = row.getContext('2d');

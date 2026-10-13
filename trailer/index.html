@@ -29,10 +29,17 @@
   .captions { position: absolute; left: 0; right: 0; top: 12.963%; height: 74.074%; pointer-events: none; }
   .cap {
     position: absolute; left: 8%; right: 8%; bottom: 13%; margin: 0; text-align: center;
-    font: italic 300 2.55cqw/1.25 var(--font-text); letter-spacing: 0.02em; color: var(--paper);
-    text-shadow: 0 0 1.2cqw rgba(0, 0, 0, 0.55), 0 0.1cqw 0.3cqw rgba(0, 0, 0, 0.6);
+    font: italic 400 2.55cqw/1.25 var(--font-text); letter-spacing: 0.02em; color: var(--paper);
+    /* Halo oscuro ancho: se lee igual sobre nubes blancas que sobre hierba. */
+    text-shadow: 0 0 0.7cqw rgba(12, 28, 44, 0.75), 0 0 2.6cqw rgba(12, 32, 52, 0.55), 0 0.1cqw 0.25cqw rgba(0, 0, 0, 0.6);
     opacity: 0; text-wrap: balance;
   }
+  /* Velo suave detrás del rótulo (sin caja): oscurece un poco lo que haya debajo. */
+  .cap::before {
+    content: ''; position: absolute; left: 6%; right: 6%; top: -70%; bottom: -70%; z-index: -1;
+    background: radial-gradient(closest-side, rgba(10, 28, 46, 0.42), rgba(10, 28, 46, 0.18) 55%, rgba(10, 28, 46, 0));
+  }
+  .cap { z-index: 0; }
   .cap.dark { color: #fffaf0; }
   .title { position: absolute; inset: 12.963% 0; display: grid; place-content: center; text-align: center; pointer-events: none; }
   .title .kanji {

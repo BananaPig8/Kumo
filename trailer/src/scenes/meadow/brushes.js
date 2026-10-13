@@ -2,7 +2,7 @@
 // referencia, franjas de hierba alta que ondulan con el viento, pétalos y
 // hojas al vuelo, e islas lejanas pintadas como masas.
 
-import { makeCanvas, fillBlob, blade, dab, stroke, mix, css, vary, renderMass, makeRamp, leafRamp, drawMass, bez, smoothClosed } from '../../engine/paint.js';
+import { makeCanvas, fillBlob, blade, dab, stroke, mix, css, vary, renderMass, makeRamp, leafRamp, drawMass, bez, smoothClosed, crownMass } from '../../engine/paint.js';
 import { clamp, lerp, smooth, noise3 } from '../../lib/util.js';
 
 // ─── Flores ─────────────────────────────────────────────────────────────────
@@ -271,7 +271,7 @@ export const ROCK_DAY = { deep: '#6a7181', shade: '#9a9893', mid: '#c2a37c', lit
 // lóbulos de roca y de qué tamaño), spikes (estalactitas), topPad (margen
 // sobre la tapa). c.cap = { path, cx, cy, rx, ry, rimK(a) } para pintar
 // encima del prado con el mismo contorno.
-export function paintIsle(rng, w, h, { light = [-0.5, -0.85, 0.45], trees = [], haze = 0, hazeColor = '#bfe3ee', leaf = LEAF_DAY, rock = ROCK_DAY, grass = { top: '#b6e05a', mid: '#86c43e', dark: '#3f7f2c' }, seed = 1, roots = 0, ry: capRy = null, wobble = 0, rows = 18, cols = 5, lobe = [0.32, 0.16], spikes = 3, topPad = null, padK = null, fine = 1, hangK = 1, hangLen = 1, massK = 1, lobeY = 1.35, strata = 0, facets = 0 } = {}) {
+export function paintIsle(rng, w, h, { light = [-0.5, -0.85, 0.45], trees = [], haze = 0, hazeColor = '#bfe3ee', leaf = LEAF_DAY, rock = ROCK_DAY, grass = { top: '#b6e05a', mid: '#86c43e', dark: '#3f7f2c' }, seed = 1, roots = 0, ry: capRy = null, wobble = 0, rows = 18, cols = 5, lobe = [0.32, 0.16], spikes = 3, topPad = null, padK = null, fine = 1, hangK = 1, hangLen = 1, massK = 1, lobeY = 1.35, strata = 0, facets = 0, meadow = 0 } = {}) {
   // fine: escala de los detalles (briznas, lianas) respecto al tamaño de la isla.
   const wf = w * fine;
   const treeH = trees.reduce((m, t) => Math.max(m, t.h * (t.big ? 1.05 : 1)), 0);
@@ -394,7 +394,8 @@ export function paintIsle(rng, w, h, { light = [-0.5, -0.85, 0.45], trees = [], 
   const gr = g.createLinearGradient(cx - w * 0.5, 0, cx + w * 0.5, 0);
   gr.addColorStop(0, grass.top); gr.addColorStop(0.55, grass.mid); gr.addColorStop(1, css(mix(grass.mid, grass.dark, 0.45)));
   g.fillStyle = gr; g.fillRect(cx - w * 0.5, cy - ry, w, ry * 2);
-  for (let i = 0; i < w * 0.6; i++) {
+  if (meadow) paintCapMeadow(g, rng, cx, cy, w * 0.5, ry, { light, k: meadow });
+  else for (let i = 0; i < w * 0.6; i++) {
     const xx = cx + (rng() - 0.5) * w, yy = cy + (rng() - 0.5) * ry * 2;
     dab(g, xx, yy, wf * (0.015 + rng() * 0.03), Math.max(1, wf * 0.008), (rng() - 0.5) * 0.4, rng() < 0.5 ? grass.top : mix(grass.mid, grass.dark, 0.35), 0.5, i, 0.2);
   }
@@ -406,7 +407,7 @@ export function paintIsle(rng, w, h, { light = [-0.5, -0.85, 0.45], trees = [], 
   // Árboles (de atrás adelante).
   for (const tr of [...trees].sort((a, b) => a.dy - b.dy)) {
     const tx = cx + tr.x * w * 0.5, ty = cy + tr.dy * ry;
-    if (tr.big) paintGreatTree(g, rng, tx, ty, tr.h, { leaf, light, seed: seed + 3 });
+    if (tr.big) paintGreatTree(g, rng, tx, ty, tr.h, { leaf, light, seed: seed + 3, ground: capP });
     else paintLeafyTree(g, rng, tx, ty, tr.h, { leaf, light, seed: seed + tr.x * 10 });
   }
   if (haze > 0) {
@@ -503,6 +504,15 @@ export function paintFacetBelly(g, rng, cx, cy, hw, depth, { rock = ROCK_DAY, li
       for (let k = 0; k < 4; k++) { const q = pts[pts.length - 1]; pts.push([q[0] + (rng() - 0.5) * wd * 0.15, q[1] + len / 4]); }
       stroke(g, pts, { width: lw * 0.9, color: mix(rock.deep, haze, back), alpha: 0.55, taper: [0.1, 0.7], wobble: 0.3, seed: xx });
     }
+    // Cornisas: cada prisma se parte en bloques con un canto de luz arriba
+    // y una franja de sombra debajo (rompe la verticalidad).
+    for (let k = 0; k < 1 + Math.floor(rng() * 2.5); k++) {
+      const yy = y0 + L * (0.18 + rng() * 0.55);
+      const tilt = (rng() - 0.5) * wd * 0.25;
+      const lp = [[x - wd * 0.6, yy - tilt], [x, yy + (rng() - 0.5) * wd * 0.08], [x + wd * 0.6, yy + tilt]];
+      stroke(g, lp.map(([a, b]) => [a, b + wd * 0.07]), { width: wd * 0.16, color: mix(rock.deep, haze, back), alpha: 0.4, taper: [0.1, 0.1], wobble: 0.3, seed: yy });
+      stroke(g, lp, { width: Math.max(1.2, wd * 0.05), color: mix(rock.hi, haze, back), alpha: 0.5 * (0.4 + sun), taper: [0.15, 0.3], wobble: 0.3, seed: yy + 1 });
+    }
     // Rebote frío del mar de nubes en la parte de abajo.
     const bg = g.createLinearGradient(0, y0 + L * 0.55, 0, y0 + L);
     bg.addColorStop(0, css(bounce, 0)); bg.addColorStop(1, css(bounce, 0.26 * (1 - back)));
@@ -513,10 +523,73 @@ export function paintFacetBelly(g, rng, cx, cy, hw, depth, { rock = ROCK_DAY, li
     const far = ls < 0 ? right : left;
     stroke(g, [...far, tip], { width: lw * 1.2, color: mix(rock.deep, haze, back * 0.5), alpha: 0.4, taper: [0.1, 0.8], wobble: 0.2, seed: x * 0.7 });
   }
+  // La mitad de abajo queda de espaldas al sol: sombra fría general.
+  const cool = g.createLinearGradient(0, cy + depth * 0.3, 0, cy + depth);
+  cool.addColorStop(0, 'rgba(78,92,124,0)'); cool.addColorStop(0.6, 'rgba(78,92,124,0.28)'); cool.addColorStop(1, 'rgba(78,92,124,0.4)');
+  g.save(); g.globalCompositeOperation = 'source-atop'; g.fillStyle = cool; g.fillRect(cx - hw * 1.1, cy, hw * 2.2, depth * 1.1); g.restore();
   // Sombra que proyecta el labio sobre lo alto de la panza.
   const sh = g.createLinearGradient(0, cy, 0, cy + depth * 0.16);
   sh.addColorStop(0, 'rgba(52,50,66,0.55)'); sh.addColorStop(1, 'rgba(52,50,66,0)');
   g.save(); g.globalCompositeOperation = 'source-atop'; g.fillStyle = sh; g.fillRect(cx - hw * 1.1, cy - 4, hw * 2.2, depth * 0.17); g.restore();
+}
+
+// ─── Tapa de prado de una isla ──────────────────────────────────────────────
+// Prado visto desde poco más arriba: matas finas que crecen hacia delante,
+// ondulaciones de luz, florecillas a la deriva y el canto delantero que se
+// curva hacia la sombra. (cx, cy, rx, ry) = elipse de la tapa; rimK(a) su
+// contorno irregular; k escala el tamaño de las matas.
+export const CAP_GRASS = { far: '#c2e66c', mid: '#97ce48', near: '#62ad30', dark: '#2f7428', lit: '#d9f27e', hi: '#f0fba6' };
+export function paintCapMeadow(g, rng, cx, cy, rx, ry, { grass = CAP_GRASS, light = [-0.5, -0.85], k = 1, flowers = 1 } = {}) {
+  const ls = Math.sign(light[0] || -1);
+  const x0 = cx - rx - 20 * k, y0 = cy - ry - 12 * k, w = rx * 2 + 40 * k, h = ry * 2 + 24 * k;
+  const depth = (y) => clamp((y - (cy - ry)) / (ry * 2));
+  let gr = g.createLinearGradient(0, y0, 0, y0 + h);
+  gr.addColorStop(0, css(grass.far)); gr.addColorStop(0.5, css(grass.mid)); gr.addColorStop(1, css(grass.near));
+  g.fillStyle = gr; g.fillRect(x0, y0, w, h);
+  // Luz del lado del sol y sombra al otro (la isla es una cúpula muy plana).
+  gr = g.createLinearGradient(ls < 0 ? x0 : x0 + w, 0, ls < 0 ? x0 + w : x0, 0);
+  gr.addColorStop(0, css(grass.hi, 0.3)); gr.addColorStop(0.35, css(grass.hi, 0.06)); gr.addColorStop(0.62, css(grass.dark, 0)); gr.addColorStop(1, css(grass.dark, 0.32));
+  g.fillStyle = gr; g.fillRect(x0, y0, w, h);
+  // Ondulaciones del terreno: manchas largas y planas de luz y sombra.
+  const nb = Math.round(70 * w / 1264);
+  for (let i = 0; i < nb; i++) {
+    const x = x0 + rng() * w, y = y0 + rng() * h, d = depth(y);
+    fillBlob(g, x, y, lerp(30, 110, d) * k * (0.6 + rng()), lerp(3, 9, d) * k, rng() < 0.5 ? grass.dark : grass.lit, 0.13, { wobble: 0.4, seed: i, freq: 2.2 });
+  }
+  // Matas: abanicos de briznas, diminutas al fondo y algo mayores delante.
+  const nm = Math.round(w * h / 26 / (k * k));
+  for (let i = 0; i < nm; i++) {
+    const y = y0 + rng() * h, x = x0 + rng() * w, d = depth(y);
+    const size = lerp(2.2, 7.5, d * d) * k * (0.7 + rng() * 0.6);
+    const base = d < 0.5 ? mix(grass.far, grass.mid, d * 2) : mix(grass.mid, grass.near, d * 2 - 1);
+    const r = rng();
+    const c = r < 0.3 ? mix(base, grass.dark, 0.5) : r < 0.72 ? vary(base, rng, 0.06) : mix(base, grass.lit, 0.5 + rng() * 0.4);
+    const n = 2 + Math.floor(rng() * 3);
+    for (let j = 0; j < n; j++) blade(g, x + (j - n / 2) * size * 0.25, y, size * (0.7 + rng() * 0.6), Math.max(0.7, size * 0.18), (j / n - 0.45) * size * 0.9 + size * 0.15, c, 0.9, i + j);
+  }
+  for (let i = 0; i < nm * 0.25; i++) {
+    const y = y0 + rng() * h, x = x0 + rng() * w, d = depth(y);
+    const size = lerp(2, 6, d * d) * k;
+    blade(g, x, y, size, Math.max(0.6, size * 0.14), (rng() - 0.3) * size * 0.6, rng() < 0.6 ? grass.lit : grass.hi, 0.8, i * 0.3);
+  }
+  // Florecillas a la deriva (blancas, amarillas, celestes y melocotón).
+  const FL = [['#fbfaf0', 0.36], ['#f6dc45', 0.34], ['#a9dbee', 0.15], ['#f5a882', 0.15]];
+  const nf = Math.round(150 * w * h / (1264 * 156) * flowers);
+  for (let i = 0; i < nf; i++) {
+    let r = rng(), col = FL[0][0];
+    for (const [c, wgt] of FL) { if ((r -= wgt) <= 0) { col = c; break; } }
+    const fx = x0 + rng() * w, fy = y0 + rng() * h, d = depth(fy);
+    const spread = lerp(10, 40, d) * k;
+    const m = 3 + Math.floor(rng() * 8);
+    for (let j = 0; j < m; j++) {
+      const sz = lerp(0.9, 2.4, d) * k * (0.7 + rng() * 0.6);
+      fillBlob(g, fx + (rng() - 0.5) * spread * 2, fy + (rng() - 0.5) * spread * 0.3, sz, sz * 0.7, col, 0.95, { wobble: 0.2, n: 7, seed: j });
+    }
+  }
+  // El canto delantero se curva hacia abajo: franja en sombra fría.
+  gr = g.createLinearGradient(0, cy + ry * 0.35, 0, cy + ry);
+  gr.addColorStop(0, 'rgba(42,106,58,0)'); gr.addColorStop(0.7, 'rgba(42,106,58,0.22)'); gr.addColorStop(1, 'rgba(36,86,58,0.42)');
+  g.fillStyle = gr; g.fillRect(x0, cy, w, ry + 12 * k);
 }
 
 function vgradient(g, y0, y1, color, a) {
@@ -531,40 +604,157 @@ function trunkStroke(g, pts, tw, leaf, light, seed) {
   stroke(g, pts.map(([px, py]) => [px + s * tw * 0.22, py]), { width: tw * 0.38, color: leaf.trunkLit, alpha: 0.85, taper: [0.05, 0.8], wobble: 0.3, seed: seed + 1 });
 }
 
-// Árbol hojoso pequeño: tronco con raíces y una copa en masa.
-export function paintLeafyTree(g, rng, x, y, h, { leaf = LEAF_DAY, light = [-0.5, -0.85, 0.45], seed = 1 } = {}) {
-  const tw = h * 0.06, th = h * 0.5;
-  const lean = (rng() - 0.5) * 0.15 * h;
+// Árbol hojoso pequeño: tronco corto que se abre en dos o tres ramas y una
+// copa en grumos (las pequeñitas, de un solo grumo).
+export function paintLeafyTree(g, rng, x, y, h, { leaf = LEAF_DAY, light = [-0.5, -0.85, 0.45], seed = 1, haze = 0, hazeColor = '#bfe3ee' } = {}) {
+  if (h < 46) {
+    const tw = h * 0.06, th = h * 0.5;
+    const lean = (rng() - 0.5) * 0.15 * h;
+    const pts = bez([x, y], [x - lean * 0.3, y - th * 0.4], [x + lean * 0.6, y - th * 0.75], [x + lean, y - th], 10);
+    trunkStroke(g, pts, tw, leaf, light, seed);
+    const top = pts[pts.length - 1];
+    const m = leafMass(rng, h * 0.3, h * 0.26, { pal: leaf, light, clumps: Math.round(12 + h * 0.06), seed });
+    drawMass(g, m, top[0], y - h * 0.7);
+    return;
+  }
+  const tw = h * 0.075, th = h * 0.42;
+  const lean = (rng() - 0.5) * 0.12 * h;
   const pts = bez([x, y], [x - lean * 0.3, y - th * 0.4], [x + lean * 0.6, y - th * 0.75], [x + lean, y - th], 10);
-  trunkStroke(g, pts, tw, leaf, light, seed);
   const top = pts[pts.length - 1];
-  const m = leafMass(rng, h * 0.3, h * 0.26, { pal: leaf, light, clumps: Math.round(12 + h * 0.06), seed });
-  drawMass(g, m, top[0], y - h * 0.7);
+  const clumps = [[0, -0.6, 0.66, 0.36], [-0.26, -0.5, 0.4, 0.22], [0.27, -0.52, 0.42, 0.22]];
+  // Ramas hacia los grumos laterales.
+  for (const [dx, dy] of clumps.slice(1)) {
+    trunkStroke(g, bez(top, [top[0] + dx * h * 0.3, top[1] - h * 0.05], [x + dx * h * 0.8, y + dy * h + h * 0.05], [x + dx * h, y + dy * h + h * 0.02], 6), tw * 0.45, leaf, light, seed + dx);
+  }
+  trunkStroke(g, pts, tw, leaf, light, seed);
+  for (const [i, [dx, dy, cw, ch]] of clumps.entries()) {
+    const m = crownMass(rng, h * cw, h * ch, { pal: leaf, light, seed: seed * 7 + i, tower: 0.4, levels: h > 120 ? 3 : 2, haze, hazeColor });
+    drawMass(g, m, x + dx * h + lean, y + dy * h);
+  }
 }
 
-// El gran árbol antiguo: tronco grueso y retorcido con contrafuertes, ramas
-// que se abren y una copa ancha en parasol, más ancha que alta.
-export function paintGreatTree(g, rng, x, y, h, { leaf = LEAF_DAY, light = [-0.5, -0.85, 0.45], seed = 1 } = {}) {
-  const tw = h * 0.13, th = h * 0.42;
-  const pts = bez([x, y], [x - tw * 0.4, y - th * 0.35], [x + tw * 0.5, y - th * 0.7], [x + tw * 0.1, y - th], 12);
-  // Contrafuertes que se abren sobre la tapa.
-  for (const k of [-1.9, -1.2, -0.6, 0.6, 1.3, 2]) {
-    stroke(g, bez([x + k * tw * 0.12, y - th * 0.3], [x + k * tw * 0.35, y - th * 0.05], [x + k * tw * 0.9, y + 1], [x + k * tw * 1.25, y + tw * 0.12], 8), { width: tw * 0.5, color: mix(leaf.trunk, '#3d2c24', 0.2), taper: [0, 0.9], seed: k * 3 });
+// El gran árbol antiguo (el de la isla principal): tronco grueso y corto que
+// se abre en cuatro brazos que suben y se meten en la copa, raíces que nacen
+// del pie y se agarran a la hierba, corteza con vetas, y una copa en parasol
+// hecha de grumos, más ancha que alta, con los de atrás azulados por el aire.
+// La madera se pinta aparte para poder sombrearla entera bajo la copa.
+// ground: Path2D opcional (la tapa) que recorta la sombra en el suelo.
+export function paintGreatTree(g, rng, x, y, h, { leaf = LEAF_DAY, light = [-0.5, -0.85, 0.45], seed = 1, ground = null } = {}) {
+  const ls = Math.sign(light[0] || -1);
+  const tw = h * 0.18, th = h * 0.38;
+  const lean = (rng() - 0.5) * tw * 0.4;
+  const bark = { dark: mix(leaf.trunk, '#2c2433', 0.45), mid: leaf.trunk, lit: leaf.trunkLit, hi: mix(leaf.trunkLit, '#f2dcb0', 0.4) };
+  // Sombra de la copa en el suelo, del lado contrario a la luz y dentro de la tapa.
+  g.save();
+  if (ground) g.clip(ground);
+  fillBlob(g, x - ls * h * 0.1, y + h * 0.01, h * 0.55, h * 0.045, mix(leaf.deep, '#16301e', 0.3), 0.4, { wobble: 0.25, seed: seed + 1, freq: 2 });
+  g.restore();
+  // Copa de atrás (más fría y apagada).
+  const back = [[-0.64, -0.5, 0.56, 0.24], [0.66, -0.52, 0.54, 0.24], [-0.1, -0.8, 0.86, 0.3], [0.34, -0.76, 0.6, 0.26]];
+  for (const [i, [dx, dy, cw, ch]] of back.entries()) {
+    const m = crownMass(rng, h * cw, h * ch, { pal: leaf, light, seed: seed * 11 + i, tower: 0.5, haze: 0.3, hazeColor: '#5f8f86', under: 0.5 });
+    drawMass(g, m, x + dx * h, y + dy * h);
   }
-  trunkStroke(g, pts, tw, leaf, light, seed);
-  const top = pts[pts.length - 1];
-  for (let i = 0; i < 6; i++) {
-    const dir = i % 2 ? 1 : -1;
-    const t = 0.6 + rng() * 0.35;
-    const bx = lerp(x, top[0], t), by = lerp(y, top[1], t);
-    const len = h * (0.24 + rng() * 0.16);
-    const p2 = bez([bx, by], [bx + dir * len * 0.35, by - len * 0.35], [bx + dir * len * 0.8, by - len * 0.5], [bx + dir * len, by - len * 0.48], 8);
-    trunkStroke(g, p2, tw * 0.42, leaf, light, seed + i);
+  const front = [[-0.5, -0.5, 0.62, 0.27], [0.5, -0.53, 0.62, 0.27], [-0.24, -0.66, 0.72, 0.31], [0.25, -0.69, 0.72, 0.31], [0.0, -0.8, 0.62, 0.29]];
+
+  // ─── Madera en su propio lienzo ───────────────────────────────────────────
+  const ox = Math.round(x - h * 1.1), oy = Math.round(y - h * 1.0);
+  const wood = makeCanvas(Math.ceil(h * 2.2), Math.ceil(h * 1.12));
+  const wg = wood.getContext('2d');
+  wg.translate(-ox, -oy);
+  // Raíces: nacen anchas bajo el tronco y se afilan sobre la hierba.
+  for (const k of [-1, 1]) {
+    for (let i = 0; i < 3; i++) {
+      const kk = k * (0.55 + i * 0.5 + rng() * 0.2);
+      const sx = x + kk * tw * 0.32, ex = x + kk * tw * (1.05 + rng() * 0.35);
+      limb(wg, rng, bez([sx, y - th * 0.22], [sx + kk * tw * 0.15, y - th * 0.06], [ex - kk * tw * 0.3, y + tw * 0.02], [ex, y + tw * 0.07], 12), tw * (0.5 - i * 0.08), tw * 0.04, bark, ls, seed + kk * 9);
+    }
   }
-  // Copa en parasol: masas laterales más bajas y una gran cúpula encima.
-  const crowns = [[-0.5, -0.5, 0.3, 0.16], [0.52, -0.48, 0.3, 0.16], [-0.26, -0.63, 0.36, 0.22], [0.28, -0.64, 0.36, 0.22], [0, -0.76, 0.46, 0.25]];
-  for (const [dx, dy, rx, ry] of crowns) {
-    const m = leafMass(rng, h * rx, h * ry, { pal: leaf, light, clumps: Math.round(18 + h * rx / 4), seed: seed + dx * 7 + dy * 3, flatBase: 0.5 });
-    drawMass(g, m, top[0] + dx * h, y + dy * h);
+  // Tronco: se estrecha un poco y vuelve a abrirse arriba; acaba redondeado
+  // dentro de los brazos.
+  const top = [x + lean, y - th];
+  limb(wg, rng, bez([x, y + tw * 0.04], [x, y - th * 0.4], [x + lean * 0.6, y - th * 0.75], [top[0], top[1] + tw * 0.2], 14), tw * 1.12, tw * 0.98, bark, ls, seed, { flare: 0.35, veins: 26 });
+  // Brazos: arrancan con todo su grosor dentro del tronco, suben y se abren
+  // hacia los grumos de delante, y acaban dentro de la copa.
+  const arms = [[-0.5, -0.5], [0.5, -0.53], [-0.24, -0.66], [0.25, -0.69]];
+  for (const [i, [dx, dy]] of arms.entries()) {
+    const f = (i % 2 ? 1 : -1) * (i < 2 ? 0.32 : 0.12);
+    const sx = top[0] + f * tw * 0.8, sy = top[1] + th * 0.4;
+    const ex = x + dx * h * 0.82, ey = y + dy * h - h * 0.09;
+    const pts = bez([sx, sy], [sx + f * tw * 0.3, sy - th * 0.3], [ex - dx * h * 0.25, ey + h * 0.06], [ex, ey], 14);
+    limb(wg, rng, pts, tw * (i < 2 ? 0.52 : 0.46), tw * 0.15, bark, ls, seed + i * 7, { veins: 10 });
+    // Ramas secundarias que suben hacia los grumos.
+    const q = pts[9];
+    const a = -Math.PI / 2 + dx * 1.4 + (rng() - 0.5) * 0.4;
+    const len = h * (0.12 + rng() * 0.06);
+    limb(wg, rng, bez(q, [q[0] + Math.cos(a) * len * 0.3, q[1] + Math.sin(a) * len * 0.4], [q[0] + Math.cos(a) * len * 0.7, q[1] + Math.sin(a) * len * 0.8], [q[0] + Math.cos(a) * len, q[1] + Math.sin(a) * len], 8), tw * 0.14, tw * 0.05, bark, ls, seed + i * 7 + 3, { veins: 2 });
+  }
+  // Sombra de la copa sobre la madera: arriba casi negra azulada, y bajando
+  // por el tronco hasta media altura.
+  wg.setTransform(1, 0, 0, 1, 0, 0);
+  wg.globalCompositeOperation = 'source-atop';
+  const sh = wg.createLinearGradient(0, (y - h * 0.62) - oy, 0, (y - th * 0.35) - oy);
+  sh.addColorStop(0, 'rgba(22,36,44,0.82)'); sh.addColorStop(0.45, 'rgba(26,40,48,0.5)'); sh.addColorStop(1, 'rgba(26,40,48,0)');
+  wg.fillStyle = sh; wg.fillRect(0, 0, wood.width, wood.height);
+  // Manchas de sol que se cuelan entre las hojas.
+  for (let i = 0; i < 7; i++) {
+    const yy = y - th * (0.15 + rng() * 0.6) - oy, xx = x + ls * tw * (0.1 + rng() * 0.45) - ox;
+    fillBlob(wg, xx, yy, tw * (0.08 + rng() * 0.1), tw * (0.05 + rng() * 0.06), bark.hi, 0.35, { wobble: 0.3, seed: i + seed });
+  }
+  wg.globalCompositeOperation = 'source-over';
+  g.drawImage(wood, ox, oy);
+  // Copa de delante.
+  for (const [i, [dx, dy, cw, ch]] of front.entries()) {
+    const m = crownMass(rng, h * cw, h * ch, { pal: leaf, light, seed: seed * 17 + i, tower: 0.55, under: 0.4 });
+    drawMass(g, m, x + dx * h, y + dy * h);
   }
 }
+
+// Rama o tronco como volumen: ancho w0 en la base y w1 en la punta (sin
+// pellizco en la base), con la cara de luz, la de sombra, un filo de luz y
+// vetas de corteza que siguen la curva. flare ensancha el pie.
+function limb(g, rng, pts, w0, w1, bark, ls, seed, { flare = 0, veins = 6 } = {}) {
+  const n = pts.length;
+  const nrm = [], wd = [];
+  for (let i = 0; i < n; i++) {
+    const a = pts[Math.max(0, i - 1)], b = pts[Math.min(n - 1, i + 1)];
+    let dx = b[0] - a[0], dy = b[1] - a[1];
+    const l = Math.hypot(dx, dy) || 1; dx /= l; dy /= l;
+    nrm.push([-dy, dx]);
+    const s = i / (n - 1);
+    wd.push((lerp(w0, w1, Math.pow(s, 0.85)) * (1 + flare * Math.pow(1 - s, 6)) * (1 + (noise3(s * 5 + seed, seed, 1.3) - 0.5) * 0.12)) / 2);
+  }
+  // Lado de la luz: el normal que apunta hacia la luz (de arriba, del lado ls).
+  const lx = ls * 0.5, ly = -0.85;
+  const band = (o0, o1) => {
+    const p = new Path2D();
+    for (let i = 0; i < n; i++) { const [nx, ny] = nrm[i]; const sg = Math.sign(nx * lx + ny * ly || 1); const k = o0 * wd[i] * sg; i ? p.lineTo(pts[i][0] + nx * k, pts[i][1] + ny * k) : p.moveTo(pts[i][0] + nx * k, pts[i][1] + ny * k); }
+    for (let i = n - 1; i >= 0; i--) { const [nx, ny] = nrm[i]; const sg = Math.sign(nx * lx + ny * ly || 1); const k = o1 * wd[i] * sg; p.lineTo(pts[i][0] + nx * k, pts[i][1] + ny * k); }
+    p.closePath();
+    return p;
+  };
+  g.fillStyle = css(bark.mid); g.fill(band(-1, 1));
+  g.fillStyle = css(bark.dark, 0.85); g.fill(band(-1, -0.25));
+  g.fillStyle = css(mix(bark.dark, '#4b5a72', 0.35), 0.5); g.fill(band(-1, -0.75));
+  g.fillStyle = css(bark.lit, 0.95); g.fill(band(0.2, 0.92));
+  g.fillStyle = css(bark.hi, 0.55); g.fill(band(0.55, 0.85));
+  // Vetas: trozos de línea paralelos a la rama.
+  g.lineCap = 'round';
+  for (let v = 0; v < veins; v++) {
+    const off = (rng() * 2 - 1) * 0.85;
+    const s0 = rng() * 0.8, s1 = Math.min(1, s0 + 0.12 + rng() * 0.35);
+    const i0 = Math.floor(s0 * (n - 1)), i1 = Math.max(i0 + 1, Math.floor(s1 * (n - 1)));
+    const lit = off * 1 > 0.3 && rng() < 0.6;
+    g.strokeStyle = css(lit ? bark.hi : bark.dark, lit ? 0.45 : 0.5);
+    g.lineWidth = Math.max(0.8, w0 * (0.02 + rng() * 0.025));
+    g.beginPath();
+    for (let i = i0; i <= i1; i++) {
+      const [nx, ny] = nrm[i]; const sg = Math.sign(nx * lx + ny * ly || 1);
+      const k = off * wd[i] * sg + (noise3(i * 0.4, v, seed) - 0.5) * wd[i] * 0.15;
+      const px = pts[i][0] + nx * k, py = pts[i][1] + ny * k;
+      i === i0 ? g.moveTo(px, py) : g.lineTo(px, py);
+    }
+    g.stroke();
+  }
+}
+

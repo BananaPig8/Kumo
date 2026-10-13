@@ -8,7 +8,7 @@ import { place, sunUV } from '../../engine/stage.js';
 import { mulberry32, paintSky, drawMass, painterly, paintStreaks, applyPaper, makeCanvas, fillBlob, blade, css, mix, vary, vgrad, glow } from '../../engine/paint.js';
 import { PAL } from '../../engine/style.js';
 import { clamp, lerp, smooth, smoother, invLerp } from '../../lib/util.js';
-import { drawWaving, makePetals, drawPetals, paintIsle, grassStrip, litCopy } from './brushes.js';
+import { drawWaving, makePetals, drawPetals, paintIsle, paintCapMeadow, grassStrip, litCopy } from './brushes.js';
 import { MEADOW_DAY } from '../../engine/paint.js';
 import { STONE, column, arch, steps, block, drum, moss, tuft, vine } from './stone.js';
 import { makeKey, drawKey, drawKeyGlow } from './key.js';
@@ -25,62 +25,7 @@ const KX = 960, KY = 338;
 const RES = 1.25;
 const OX = 300, OY = 70, OW = 1320, OH = 760;
 const CAPX = 960, CAPY = 560, CAPRX = 612, CAPRY = 66;
-const GRASS = { far: '#c2e66c', mid: '#97ce48', near: '#62ad30', dark: '#2f7428', lit: '#d9f27e', hi: '#f0fba6' };
 export const SHRINE_LAYER = { RES, OX, OY, OW, OH };
-
-// Tapa de prado vista desde poco más arriba: matas finas que crecen hacia
-// delante, ondulaciones de luz, florecillas a la deriva y el canto delantero
-// que se curva hacia la sombra. Coordenadas de capa (antes de RES).
-function paintCapMeadow(g, rng, rimK) {
-  const x0 = CAPX - CAPRX - 20, y0 = CAPY - CAPRY - 12, w = CAPRX * 2 + 40, h = CAPRY * 2 + 24;
-  // depth(y): 0 en el borde de atrás, 1 en el canto delantero.
-  const depth = (y) => clamp((y - (CAPY - CAPRY)) / (CAPRY * 2));
-  g.fillStyle = vgrad(g, 0, y0, 0, y0 + h, [[0, GRASS.far], [0.5, GRASS.mid], [1, GRASS.near]]);
-  g.fillRect(x0, y0, w, h);
-  // Luz de la izquierda y sombra a la derecha (la isla es una cúpula muy plana).
-  g.fillStyle = vgrad(g, x0, 0, x0 + w, 0, [[0, GRASS.hi, 0.3], [0.35, GRASS.hi, 0.06], [0.62, GRASS.dark, 0], [1, GRASS.dark, 0.32]]);
-  g.fillRect(x0, y0, w, h);
-  // Ondulaciones del terreno: manchas largas y planas de luz y sombra.
-  for (let i = 0; i < 70; i++) {
-    const x = x0 + rng() * w, y = y0 + rng() * h, d = depth(y);
-    fillBlob(g, x, y, lerp(30, 110, d) * (0.6 + rng()), lerp(3, 9, d), rng() < 0.5 ? GRASS.dark : GRASS.lit, 0.13, { wobble: 0.4, seed: i, freq: 2.2 });
-  }
-  // Matas: abanicos de briznas, diminutas al fondo y algo mayores delante.
-  const nm = Math.round(w * h / 26);
-  for (let i = 0; i < nm; i++) {
-    const y = y0 + rng() * h, x = x0 + rng() * w, d = depth(y);
-    const size = lerp(2.2, 7.5, d * d) * (0.7 + rng() * 0.6);
-    const base = d < 0.5 ? mix(GRASS.far, GRASS.mid, d * 2) : mix(GRASS.mid, GRASS.near, d * 2 - 1);
-    const r = rng();
-    const c = r < 0.3 ? mix(base, GRASS.dark, 0.5) : r < 0.72 ? vary(base, rng, 0.06) : mix(base, GRASS.lit, 0.5 + rng() * 0.4);
-    const k = 2 + Math.floor(rng() * 3);
-    for (let j = 0; j < k; j++) blade(g, x + (j - k / 2) * size * 0.25, y, size * (0.7 + rng() * 0.6), Math.max(0.7, size * 0.18), (j / k - 0.45) * size * 0.9 + size * 0.15, c, 0.9, i + j);
-  }
-  // Puntas de luz.
-  for (let i = 0; i < nm * 0.25; i++) {
-    const y = y0 + rng() * h, x = x0 + rng() * w, d = depth(y);
-    const size = lerp(2, 6, d * d);
-    blade(g, x, y, size, Math.max(0.6, size * 0.14), (rng() - 0.3) * size * 0.6, rng() < 0.6 ? GRASS.lit : GRASS.hi, 0.8, i * 0.3);
-  }
-  // Florecillas a la deriva (blancas, amarillas, celestes y melocotón).
-  const FL = [['#fbfaf0', 0.36], ['#f6dc45', 0.34], ['#a9dbee', 0.15], ['#f5a882', 0.15]];
-  for (let i = 0; i < 150; i++) {
-    let r = rng(), col = FL[0][0];
-    for (const [c, wgt] of FL) { if ((r -= wgt) <= 0) { col = c; break; } }
-    const cx = x0 + rng() * w, cy = y0 + rng() * h, d = depth(cy);
-    const spread = lerp(10, 40, d);
-    const m = 3 + Math.floor(rng() * 8);
-    for (let j = 0; j < m; j++) {
-      const s = lerp(0.9, 2.4, d) * (0.7 + rng() * 0.6);
-      fillBlob(g, cx + (rng() - 0.5) * spread * 2, cy + (rng() - 0.5) * spread * 0.3, s, s * 0.7, col, 0.95, { wobble: 0.2, n: 7, seed: j });
-    }
-  }
-  // El canto delantero se curva hacia abajo: franja en sombra fría.
-  g.save();
-  g.fillStyle = vgrad(g, 0, CAPY + CAPRY * 0.35, 0, CAPY + CAPRY, [[0, '#2a6a3a', 0], [0.7, '#2a6a3a', 0.22], [1, '#24563a', 0.42]]);
-  g.fillRect(x0, CAPY, w, CAPRY + 12);
-  g.restore();
-}
 
 export function paintShrineIsle(rng) {
   const isle = makeCanvas(OW * RES, OH * RES);
@@ -100,7 +45,7 @@ export function paintShrineIsle(rng) {
   ig.setTransform(1, 0, 0, 1, dx, dy);
   ig.clip(base.cap.path);
   toLayer(ig);
-  paintCapMeadow(ig, rng, base.cap.rimK);
+  paintCapMeadow(ig, rng, CAPX, CAPY, CAPRX, CAPRY, { light: L });
   ig.restore();
   toLayer(ig);
   // Sombras de las ruinas sobre la hierba (la luz viene de delante a la izquierda).

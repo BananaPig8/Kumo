@@ -98,6 +98,8 @@ if (!CAPTURE) {
   await buildAll((i, n) => { note.textContent = `Pintando los fondos… ${Math.round((i / n) * 100)} %`; });
   await renderAt(0);
   setupPlayer();
+  // La música se sintetiza de antemano para que «play» no espere.
+  import('./audio/score.js').then((m) => setTimeout(() => m.prepareScore(DURATION), 50)).catch(() => {});
 }
 
 function setupPlayer() {

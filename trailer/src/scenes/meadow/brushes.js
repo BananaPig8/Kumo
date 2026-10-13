@@ -271,7 +271,7 @@ export const ROCK_DAY = { deep: '#6a7181', shade: '#9a9893', mid: '#c2a37c', lit
 // lóbulos de roca y de qué tamaño), spikes (estalactitas), topPad (margen
 // sobre la tapa). c.cap = { path, cx, cy, rx, ry, rimK(a) } para pintar
 // encima del prado con el mismo contorno.
-export function paintIsle(rng, w, h, { light = [-0.5, -0.85, 0.45], trees = [], haze = 0, hazeColor = '#bfe3ee', leaf = LEAF_DAY, rock = ROCK_DAY, grass = { top: '#b6e05a', mid: '#86c43e', dark: '#3f7f2c' }, seed = 1, roots = 0, ry: capRy = null, wobble = 0, rows = 18, cols = 5, lobe = [0.32, 0.16], spikes = 3, topPad = null, padK = null, fine = 1, hangK = 1, hangLen = 1, massK = 1, lobeY = 1.35, strata = 0, facets = 0, meadow = 0 } = {}) {
+export function paintIsle(rng, w, h, { light = [-0.5, -0.85, 0.45], trees = [], haze = 0, hazeColor = '#bfe3ee', leaf = LEAF_DAY, rock = ROCK_DAY, grass = { top: '#b6e05a', mid: '#86c43e', dark: '#3f7f2c' }, seed = 1, roots = 0, ry: capRy = null, wobble = 0, rows = 18, cols = 5, lobe = [0.32, 0.16], spikes = 3, topPad = null, padK = null, fine = 1, hangK = 1, hangLen = 1, massK = 1, lobeY = 1.35, strata = 0, facets = 0, meadow = 0, capGrass = undefined, bellyOpts = {} } = {}) {
   // fine: escala de los detalles (briznas, lianas) respecto al tamaño de la isla.
   const wf = w * fine;
   const treeH = trees.reduce((m, t) => Math.max(m, t.h * (t.big ? 1.05 : 1)), 0);
@@ -314,7 +314,7 @@ export function paintIsle(rng, w, h, { light = [-0.5, -0.85, 0.45], trees = [], 
     }
   }
   const ramp = makeRamp([[0, rock.deep], [0.3, rock.shade], [0.52, rock.mid], [0.72, rock.lit], [0.9, rock.hi]], 2.0);
-  if (facets) paintFacetBelly(g, rng, cx, cy + ry * 0.55, w * 0.5, h * 0.95, { rock, light, n: facets, fine });
+  if (facets) paintFacetBelly(g, rng, cx, cy + ry * 0.55, w * 0.5, h * 0.95, { rock, light, n: facets, fine, ...bellyOpts });
   const belly = facets ? makeCanvas(1, 1) : renderMass(cw, ch, puffs, {
     light, ramp, sharpK: 0.16 / massK, edgeAmp: 0.18, edgeFreq: 0.06 / massK, brushAmp: 0.16, brushFreq: 0.06 / massK, brushStretch: 6,
     ao: 0.45, aoRadius: Math.max(3, w * 0.02), aoRange: Math.max(4, w * 0.03), bump: 1.3, wrap: 0.4, seed, toneBias: 0.1,
@@ -394,7 +394,7 @@ export function paintIsle(rng, w, h, { light = [-0.5, -0.85, 0.45], trees = [], 
   const gr = g.createLinearGradient(cx - w * 0.5, 0, cx + w * 0.5, 0);
   gr.addColorStop(0, grass.top); gr.addColorStop(0.55, grass.mid); gr.addColorStop(1, css(mix(grass.mid, grass.dark, 0.45)));
   g.fillStyle = gr; g.fillRect(cx - w * 0.5, cy - ry, w, ry * 2);
-  if (meadow) paintCapMeadow(g, rng, cx, cy, w * 0.5, ry, { light, k: meadow });
+  if (meadow) paintCapMeadow(g, rng, cx, cy, w * 0.5, ry, { light, k: meadow, grass: capGrass });
   else for (let i = 0; i < w * 0.6; i++) {
     const xx = cx + (rng() - 0.5) * w, yy = cy + (rng() - 0.5) * ry * 2;
     dab(g, xx, yy, wf * (0.015 + rng() * 0.03), Math.max(1, wf * 0.008), (rng() - 0.5) * 0.4, rng() < 0.5 ? grass.top : mix(grass.mid, grass.dark, 0.35), 0.5, i, 0.2);

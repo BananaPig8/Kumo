@@ -2,7 +2,7 @@
 // referencia, franjas de hierba alta que ondulan con el viento, pétalos y
 // hojas al vuelo, e islas lejanas pintadas como masas.
 
-import { makeCanvas, fillBlob, blade, dab, stroke, mix, css, vary, renderMass, makeRamp, leafRamp, drawMass, bez } from '../../engine/paint.js';
+import { makeCanvas, fillBlob, blade, dab, stroke, mix, css, vary, renderMass, makeRamp, leafRamp, drawMass, bez, smoothClosed } from '../../engine/paint.js';
 import { clamp, lerp, smooth, noise3 } from '../../lib/util.js';
 
 // ─── Flores ─────────────────────────────────────────────────────────────────
@@ -266,30 +266,45 @@ export const ROCK_DAY = { deep: '#6a7181', shade: '#9a9893', mid: '#c2a37c', lit
 // alargados, tierra cálida arriba y roca fría abajo), tapa de hierba, labio
 // colgante, raíces y lianas, y árboles hojosos.
 // Devuelve un lienzo con anchor en el centro del borde superior de la tapa.
-export function paintIsle(rng, w, h, { light = [-0.5, -0.85, 0.45], trees = [], haze = 0, hazeColor = '#bfe3ee', leaf = LEAF_DAY, rock = ROCK_DAY, grass = { top: '#b6e05a', mid: '#86c43e', dark: '#3f7f2c' }, seed = 1, roots = 0 } = {}) {
+// Opciones para islas grandes vistas de cerca: ry (semieje de la tapa),
+// wobble (borde irregular de la tapa y del labio), rows/cols/lobe (cuántos
+// lóbulos de roca y de qué tamaño), spikes (estalactitas), topPad (margen
+// sobre la tapa). c.cap = { path, cx, cy, rx, ry, rimK(a) } para pintar
+// encima del prado con el mismo contorno.
+export function paintIsle(rng, w, h, { light = [-0.5, -0.85, 0.45], trees = [], haze = 0, hazeColor = '#bfe3ee', leaf = LEAF_DAY, rock = ROCK_DAY, grass = { top: '#b6e05a', mid: '#86c43e', dark: '#3f7f2c' }, seed = 1, roots = 0, ry: capRy = null, wobble = 0, rows = 18, cols = 5, lobe = [0.32, 0.16], spikes = 3, topPad = null, padK = null, fine = 1, hangK = 1, hangLen = 1, massK = 1, lobeY = 1.35, strata = 0, facets = 0 } = {}) {
+  // fine: escala de los detalles (briznas, lianas) respecto al tamaño de la isla.
+  const wf = w * fine;
   const treeH = trees.reduce((m, t) => Math.max(m, t.h * (t.big ? 1.05 : 1)), 0);
   const big = trees.find((t) => t.big);
-  const pad = Math.round(w * (big ? 0.4 : 0.15));
-  const top = Math.round(treeH + w * 0.15);
+  const pad = Math.round(w * (padK ?? (big ? 0.4 : 0.15)));
+  const top = Math.round(topPad ?? (treeH + w * 0.15));
   const cw = Math.ceil(w + pad * 2), ch = Math.ceil(top + h * 1.25 + w * 0.1);
   const cx = cw / 2, cy = top;
   const c = makeCanvas(cw, ch);
   const g = c.getContext('2d');
-  const ry = w * 0.09;
+  const ry = capRy ?? w * 0.09;
+  // Contorno de la tapa: elipse con un ruido suave (el mismo para el labio).
+  const rimK = (a) => wobble > 0 ? 1 + (noise3(Math.cos(a) * 2.5 + seed, Math.sin(a) * 2.5 - seed, seed * 0.37) - 0.5) * 2 * wobble : 1;
+  const rimPath = (x0, y0, rx, ryy) => {
+    if (wobble <= 0) { const p = new Path2D(); p.ellipse(x0, y0, rx, ryy, 0, 0, Math.PI * 2); return p; }
+    const pts = [];
+    for (let i = 0; i < 96; i++) { const a = (i / 96) * Math.PI * 2, k = rimK(a); pts.push([x0 + Math.cos(a) * rx * k, y0 + Math.sin(a) * ryy * k]); }
+    return smoothClosed(pts);
+  };
   // Panza: lóbulos alargados que se estrechan hacia la punta, y alguna estalactita.
   const puffs = [];
-  const n = 18;
+  const n = rows;
   for (let i = 0; i < n; i++) {
     const t = i / (n - 1);
     const width = w * 0.5 * Math.pow(1 - t, 0.85);
-    const k = Math.max(1, Math.round(5 * (1 - t)) + 1);
+    const k = Math.max(1, Math.round(cols * (1 - t)) + 1);
     for (let j = 0; j < k; j++) {
       const f = k === 1 ? 0 : (j / (k - 1) - 0.5) * 2;
-      const r = Math.max(3, width * (0.32 + rng() * 0.16));
-      puffs.push({ x: cx + f * width * 0.78 + (rng() - 0.5) * r * 0.5 + Math.sin(t * 3 + seed) * w * 0.03 * t, y: cy + ry * 0.6 + t * h * 0.85, rx: r * 0.85, ry: r * 1.35, z: (1 - Math.abs(f)) * r * 0.4 + (1 - t) * w * 0.05 });
+      const r = Math.max(3, width * (lobe[0] + rng() * lobe[1]));
+      puffs.push({ x: cx + f * width * 0.78 + (rng() - 0.5) * r * 0.5 + Math.sin(t * 3 + seed) * w * 0.03 * t, y: cy + ry * 0.6 + t * h * 0.85, rx: r * 0.85, ry: r * lobeY, z: (1 - Math.abs(f)) * r * 0.4 + (1 - t) * w * 0.05 });
     }
   }
-  for (let s2 = 0; s2 < 3; s2++) {
+  for (let s2 = 0; s2 < spikes; s2++) {
     const x0 = cx + (rng() - 0.5) * w * 0.5;
     const len = h * (0.22 + rng() * 0.22);
     for (let i = 0; i < 12; i++) {
@@ -299,8 +314,9 @@ export function paintIsle(rng, w, h, { light = [-0.5, -0.85, 0.45], trees = [], 
     }
   }
   const ramp = makeRamp([[0, rock.deep], [0.3, rock.shade], [0.52, rock.mid], [0.72, rock.lit], [0.9, rock.hi]], 2.0);
-  const belly = renderMass(cw, ch, puffs, {
-    light, ramp, sharpK: 0.16, edgeAmp: 0.18, edgeFreq: 0.06, brushAmp: 0.16, brushFreq: 0.06, brushStretch: 6,
+  if (facets) paintFacetBelly(g, rng, cx, cy + ry * 0.55, w * 0.5, h * 0.95, { rock, light, n: facets, fine });
+  const belly = facets ? makeCanvas(1, 1) : renderMass(cw, ch, puffs, {
+    light, ramp, sharpK: 0.16 / massK, edgeAmp: 0.18, edgeFreq: 0.06 / massK, brushAmp: 0.16, brushFreq: 0.06 / massK, brushStretch: 6,
     ao: 0.45, aoRadius: Math.max(3, w * 0.02), aoRange: Math.max(4, w * 0.03), bump: 1.3, wrap: 0.4, seed, toneBias: 0.1,
     vertical: { top: cy, bottom: cy + h, amount: 0.32 },
   });
@@ -309,6 +325,37 @@ export function paintIsle(rng, w, h, { light = [-0.5, -0.85, 0.45], trees = [], 
   g.globalCompositeOperation = 'destination-out';
   g.fillRect(0, 0, cw, cy);
   g.restore();
+  // Islas vistas de cerca: estratos (pinceladas largas casi horizontales,
+  // cálidas en la cara de luz y frías en la de sombra) y grietas verticales.
+  if (strata > 0) {
+    g.save();
+    g.globalCompositeOperation = 'source-atop';
+    const ls = Math.sign(light[0] || -1);
+    const ns = Math.round(w / 14 * strata);
+    for (let i = 0; i < ns; i++) {
+      const t = Math.pow(rng(), 1.2);
+      const yy = cy + ry * 0.8 + t * h * 0.8;
+      const hw = w * 0.5 * Math.pow(1 - t, 0.85);
+      const xx = cx + (rng() * 2 - 1) * hw;
+      const side = (xx - cx) / Math.max(1, hw) * ls;
+      const lit = rng() < 0.5 + side * 0.4;
+      const len = wf * (0.03 + rng() * 0.12);
+      const tilt = (rng() - 0.5) * len * 0.12;
+      stroke(g, [[xx - len / 2, yy - tilt], [xx, yy + (rng() - 0.5) * wf * 0.004], [xx + len / 2, yy + tilt]], { width: wf * (0.003 + rng() * 0.008), color: lit ? (rng() < 0.4 ? rock.hi : rock.lit) : (rng() < 0.5 ? rock.deep : rock.shade), alpha: lit ? 0.3 + rng() * 0.2 : 0.22 + rng() * 0.18, taper: [0.2, 0.3], wobble: 0.3, seed: i });
+    }
+    for (let i = 0; i < ns * 0.25; i++) {
+      const t = Math.pow(rng(), 1.1);
+      const yy = cy + ry * 0.8 + t * h * 0.7;
+      const hw = w * 0.45 * Math.pow(1 - t, 0.85);
+      const xx = cx + (rng() * 2 - 1) * hw;
+      const len = wf * (0.02 + rng() * 0.06);
+      const pts = [[xx, yy]];
+      for (let k = 0; k < 4; k++) { const q = pts[pts.length - 1]; pts.push([q[0] + (rng() - 0.5) * len * 0.3, q[1] + len / 4]); }
+      stroke(g, pts, { width: wf * (0.002 + rng() * 0.003), color: rock.deep, alpha: 0.5, taper: [0.1, 0.7], wobble: 0.3, seed: i * 7 });
+      stroke(g, pts.map(([a, b]) => [a + ls * wf * 0.003, b]), { width: wf * 0.0025, color: rock.hi, alpha: 0.35, taper: [0.1, 0.7], seed: i * 7 + 1 });
+    }
+    g.restore();
+  }
   // Franja de tierra bajo la tapa.
   g.save();
   g.globalCompositeOperation = 'source-atop';
@@ -317,14 +364,14 @@ export function paintIsle(rng, w, h, { light = [-0.5, -0.85, 0.45], trees = [], 
   g.restore();
   // Raíces y lianas que cuelgan de la panza.
   const hang = (xx, yy, len, col, wd) => stroke(g, bez([xx, yy], [xx + (rng() - 0.5) * len * 0.25, yy + len * 0.4], [xx + (rng() - 0.5) * len * 0.35, yy + len * 0.8], [xx + (rng() - 0.5) * len * 0.3, yy + len], 9), { width: wd, color: col, taper: [0.05, 0.9], wobble: 0.25, seed: xx });
-  for (let i = 0; i < Math.round(w / 8); i++) {
+  for (let i = 0; i < Math.round(w / 8 * hangK); i++) {
     const t = rng();
     const xx = cx + (t - 0.5) * w * 0.92;
     const yy = cy + ry * 0.7 + Math.sin(t * Math.PI) * ry * 0.3;
-    const len = h * (0.08 + Math.pow(rng(), 2) * 0.5) * (1.2 - Math.abs(t - 0.5));
+    const len = h * hangLen * (0.08 + Math.pow(rng(), 2) * 0.5) * (1.2 - Math.abs(t - 0.5));
     const vine = rng() < 0.65;
-    hang(xx, yy, len, vine ? mix(leaf.shade, leaf.deep, rng()) : '#6a4c38', Math.max(1, w * 0.006) * (1 + rng()));
-    if (vine) for (let k = 0; k < 3; k++) dab(g, xx + (rng() - 0.5) * 5, yy + len * rng(), w * 0.014, w * 0.009, rng() * 3, leaf.mid, 0.9, k);
+    hang(xx, yy, len, vine ? mix(leaf.shade, leaf.deep, rng()) : '#6a4c38', Math.max(1, wf * 0.006) * (1 + rng()));
+    if (vine) for (let k = 0; k < 3; k++) dab(g, xx + (rng() - 0.5) * 5, yy + len * rng(), wf * 0.014, wf * 0.009, rng() * 3, leaf.mid, 0.9, k);
   }
   // Raíces del gran árbol: gruesas, saltan el borde y cuelgan muy abajo.
   for (let i = 0; i < roots; i++) {
@@ -333,15 +380,15 @@ export function paintIsle(rng, w, h, { light = [-0.5, -0.85, 0.45], trees = [], 
     hang(xx, cy + ry * 0.4, h * (0.3 + rng() * 0.45), mix(leaf.trunk, leaf.trunkLit, rng() * 0.5), Math.max(1, w * (0.004 + rng() * 0.005)));
   }
   // Labio colgante de hierba en sombra.
-  fillBlob(g, cx, cy + ry * 0.45, w * 0.515, ry * 1.05, grass.dark, 1, { wobble: 0.05, n: 40, seed: seed + 2 });
-  for (let i = 0; i < w / 3; i++) {
+  if (wobble > 0) { g.fillStyle = css(grass.dark); g.fill(rimPath(cx, cy + ry * 0.45, w * 0.515, ry * 1.05)); }
+  else fillBlob(g, cx, cy + ry * 0.45, w * 0.515, ry * 1.05, grass.dark, 1, { wobble: 0.05, n: 40, seed: seed + 2 });
+  for (let i = 0; i < w / 3 / fine; i++) {
     const a = Math.PI * rng();
-    const xx = cx + Math.cos(a) * w * 0.51, yy = cy + ry * 0.45 + Math.sin(a) * ry * 1.0;
-    blade(g, xx, yy - 2, -(w * 0.01 + rng() * w * 0.03), Math.max(1, w * 0.007), (rng() - 0.5) * 4, rng() < 0.5 ? grass.dark : mix(grass.dark, '#1f4a22', 0.5), 1, i);
+    const xx = cx + Math.cos(a) * w * 0.51 * rimK(a), yy = cy + ry * 0.45 + Math.sin(a) * ry * 1.0 * rimK(a);
+    blade(g, xx, yy - 2, -(wf * 0.01 + rng() * wf * 0.03), Math.max(1, wf * 0.007), (rng() - 0.5) * 4, rng() < 0.5 ? grass.dark : mix(grass.dark, '#1f4a22', 0.5), 1, i);
   }
   // Tapa de hierba con manchas de luz.
-  const capP = new Path2D();
-  capP.ellipse(cx, cy, w * 0.5, ry, 0, 0, Math.PI * 2);
+  const capP = rimPath(cx, cy, w * 0.5, ry);
   g.save();
   g.clip(capP);
   const gr = g.createLinearGradient(cx - w * 0.5, 0, cx + w * 0.5, 0);
@@ -349,12 +396,12 @@ export function paintIsle(rng, w, h, { light = [-0.5, -0.85, 0.45], trees = [], 
   g.fillStyle = gr; g.fillRect(cx - w * 0.5, cy - ry, w, ry * 2);
   for (let i = 0; i < w * 0.6; i++) {
     const xx = cx + (rng() - 0.5) * w, yy = cy + (rng() - 0.5) * ry * 2;
-    dab(g, xx, yy, w * (0.015 + rng() * 0.03), Math.max(1, w * 0.008), (rng() - 0.5) * 0.4, rng() < 0.5 ? grass.top : mix(grass.mid, grass.dark, 0.35), 0.5, i, 0.2);
+    dab(g, xx, yy, wf * (0.015 + rng() * 0.03), Math.max(1, wf * 0.008), (rng() - 0.5) * 0.4, rng() < 0.5 ? grass.top : mix(grass.mid, grass.dark, 0.35), 0.5, i, 0.2);
   }
   g.restore();
-  for (let i = 0; i < w / 2.5; i++) {
+  for (let i = 0; i < w / 2.5 / fine; i++) {
     const a = Math.PI + Math.PI * rng();
-    blade(g, cx + Math.cos(a) * w * 0.495, cy + Math.sin(a) * ry * 0.97 + 1.5, Math.max(2, w * 0.006 + rng() * w * 0.016), Math.max(1, w * 0.005), (rng() - 0.3) * 3, rng() < 0.5 ? grass.top : grass.mid, 1, i * 3);
+    blade(g, cx + Math.cos(a) * w * 0.495 * rimK(a), cy + Math.sin(a) * ry * 0.97 * rimK(a) + 1.5, Math.max(2, wf * 0.006 + rng() * wf * 0.016), Math.max(1, wf * 0.005), (rng() - 0.3) * 3, rng() < 0.5 ? grass.top : grass.mid, 1, i * 3);
   }
   // Árboles (de atrás adelante).
   for (const tr of [...trees].sort((a, b) => a.dy - b.dy)) {
@@ -370,7 +417,106 @@ export function paintIsle(rng, w, h, { light = [-0.5, -0.85, 0.45], trees = [], 
     g.restore();
   }
   c.anchor = [cx, cy];
+  c.cap = { path: capP, cx, cy, rx: w * 0.5, ry, rimK };
   return c;
+}
+
+// Panza de roca en facetas, para islas grandes vistas de cerca: prismas que
+// cuelgan del labio, cada uno con una cara de luz y otra de sombra, estratos
+// y grietas; más fríos y oscuros hacia la punta, con el rebote azulado del mar
+// de nubes en los cantos de abajo. (cx, cy) = centro del borde de arriba.
+export function paintFacetBelly(g, rng, cx, cy, hw, depth, { rock = ROCK_DAY, light = [-0.5, -0.85], n = 24, fine = 1, bounce = '#cfe4ee', haze = '#8f9fb4' } = {}) {
+  const ls = Math.sign(light[0] || -1);
+  const prof = (u) => Math.pow(Math.max(0, 1 - Math.pow(Math.abs(u), 1.8)), 0.7);
+  const prisms = [];
+  for (const layer of [0, 1]) {
+    const m = layer ? n : Math.round(n * 0.75);
+    for (let i = 0; i < m; i++) {
+      const u = clamp((i + 0.5 + (rng() - 0.5) * 0.8) / m * 2 - 1, -0.99, 0.99);
+      const L = depth * prof(u) * (layer ? 0.45 + rng() * 0.55 : 0.85 + rng() * 0.15) * (0.35 + 0.65 * prof(u * 0.6));
+      // Losas de anchos muy distintos: unas estrechas, otras el doble.
+      const wd = (2 * hw / m) * (layer ? 1.0 + Math.pow(rng(), 2) * 1.6 : 1.7 + rng() * 0.6);
+      prisms.push({ x: cx + u * hw * (layer ? 0.96 : 0.9), L: Math.max(depth * 0.06, L), wd, layer, u, rid: (rng() - 0.5) * 0.5 - ls * 0.12, notch: rng(), taper: 0.5 + rng() * 0.45 });
+    }
+  }
+  // Unas pocas agujas largas cerca del centro (la punta de la isla).
+  for (let i = 0; i < 4; i++) {
+    const u = (rng() - 0.5) * 0.5;
+    prisms.push({ x: cx + u * hw, L: depth * (0.85 + rng() * 0.3) * prof(u), wd: (2 * hw / n) * (0.8 + rng() * 0.6), layer: 1, u: u * 0.2, rid: (rng() - 0.5) * 0.4 - ls * 0.12, notch: 1, taper: 0.95 });
+  }
+  prisms.sort((a, b) => a.layer - b.layer || Math.abs(b.u) - Math.abs(a.u));
+  const lw = Math.max(1, hw * 0.004 * fine * 3);
+  for (const p of prisms) {
+    const { x, L, wd } = p;
+    const y0 = cy - 2;
+    // Contorno: lados que se estrechan hacia una punta (a veces con muesca).
+    const left = [], right = [];
+    for (let k = 0; k <= 5; k++) {
+      const sN = k / 5;
+      const half = wd / 2 * (1 - Math.pow(sN, 1.5) * p.taper);
+      const yy = y0 + sN * L;
+      left.push([x - half + (rng() - 0.5) * wd * 0.12, yy]);
+      right.push([x + half + (rng() - 0.5) * wd * 0.12, yy]);
+    }
+    const tip = [x + (rng() - 0.5) * wd * 0.2, y0 + L * (1.02 + rng() * 0.06)];
+    const ridgeTop = [x + p.rid * wd, y0];
+    const shape = new Path2D();
+    shape.moveTo(left[0][0], left[0][1]);
+    for (const q of left) shape.lineTo(q[0], q[1]);
+    if (p.notch < 0.35) { shape.lineTo(tip[0] - wd * 0.08, tip[1] - L * 0.05); shape.lineTo(tip[0], tip[1] - L * 0.12); }
+    shape.lineTo(tip[0], tip[1]);
+    for (let k = right.length - 1; k >= 0; k--) shape.lineTo(right[k][0], right[k][1]);
+    shape.closePath();
+    // Cara de luz (del lado de la luz) y cara de sombra, separadas por la arista.
+    const litFace = new Path2D();
+    const side = ls < 0 ? left : right;
+    litFace.moveTo(ridgeTop[0], ridgeTop[1]);
+    for (const q of side) litFace.lineTo(q[0], q[1]);
+    litFace.lineTo(tip[0], tip[1]);
+    litFace.closePath();
+    const back = p.layer === 0 ? 0.3 : 0;
+    // Las del borde del lado de la luz reciben más sol; las del otro, menos.
+    const sun = clamp(0.55 - p.u * ls * 0.45);
+    const grad = (stops) => {
+      const gr = g.createLinearGradient(0, y0, 0, y0 + L);
+      for (const [t, c] of stops) gr.addColorStop(t, css(mix(c, haze, back)));
+      return gr;
+    };
+    g.save();
+    g.clip(shape);
+    g.fillStyle = grad([[0, mix(rock.shade, rock.mid, 0.3)], [0.5, mix(rock.shade, rock.deep, 0.35)], [1, rock.deep]]);
+    g.fillRect(x - wd, y0, wd * 2, L * 1.2);
+    g.fillStyle = grad([[0, mix(rock.mid, rock.lit, sun)], [0.35, mix(rock.mid, rock.lit, sun * 0.5)], [0.75, mix(rock.mid, rock.shade, 0.55)], [1, mix(rock.shade, rock.deep, 0.3)]]);
+    g.fill(litFace);
+    // Estratos: toques cortos casi horizontales; grietas en vertical.
+    const ns = Math.round(L * wd / 900 / fine);
+    for (let i = 0; i < ns; i++) {
+      const yy = y0 + Math.pow(rng(), 1.3) * L, xx = x + (rng() - 0.5) * wd;
+      const onLit = (xx - (x + p.rid * wd)) * ls > 0;
+      const c = rng() < 0.5 ? (onLit ? rock.hi : rock.mid) : (onLit ? rock.shade : rock.deep);
+      dab(g, xx, yy, wd * (0.12 + rng() * 0.3), Math.max(1, lw * (0.6 + rng())), (rng() - 0.5) * 0.15, mix(c, haze, back), 0.22 + rng() * 0.2, i, 0.08);
+    }
+    for (let i = 0; i < 1 + rng() * 2; i++) {
+      const xx = x + (rng() - 0.5) * wd * 0.5, yy = y0 + rng() * L * 0.4;
+      const len = L * (0.2 + rng() * 0.4);
+      const pts = [[xx, yy]];
+      for (let k = 0; k < 4; k++) { const q = pts[pts.length - 1]; pts.push([q[0] + (rng() - 0.5) * wd * 0.15, q[1] + len / 4]); }
+      stroke(g, pts, { width: lw * 0.9, color: mix(rock.deep, haze, back), alpha: 0.55, taper: [0.1, 0.7], wobble: 0.3, seed: xx });
+    }
+    // Rebote frío del mar de nubes en la parte de abajo.
+    const bg = g.createLinearGradient(0, y0 + L * 0.55, 0, y0 + L);
+    bg.addColorStop(0, css(bounce, 0)); bg.addColorStop(1, css(bounce, 0.26 * (1 - back)));
+    g.fillStyle = bg; g.fillRect(x - wd, y0 + L * 0.55, wd * 2, L * 0.6);
+    g.restore();
+    // Arista: luz fina en el canto de la cara iluminada y línea de sombra al otro lado.
+    stroke(g, [ridgeTop, [lerp(ridgeTop[0], tip[0], 0.5), lerp(ridgeTop[1], tip[1], 0.5)], tip], { width: lw * 0.8, color: mix(rock.hi, haze, back), alpha: 0.35 * sun, taper: [0.2, 0.8], wobble: 0.2, seed: x * 0.3 });
+    const far = ls < 0 ? right : left;
+    stroke(g, [...far, tip], { width: lw * 1.2, color: mix(rock.deep, haze, back * 0.5), alpha: 0.4, taper: [0.1, 0.8], wobble: 0.2, seed: x * 0.7 });
+  }
+  // Sombra que proyecta el labio sobre lo alto de la panza.
+  const sh = g.createLinearGradient(0, cy, 0, cy + depth * 0.16);
+  sh.addColorStop(0, 'rgba(52,50,66,0.55)'); sh.addColorStop(1, 'rgba(52,50,66,0)');
+  g.save(); g.globalCompositeOperation = 'source-atop'; g.fillStyle = sh; g.fillRect(cx - hw * 1.1, cy - 4, hw * 2.2, depth * 0.17); g.restore();
 }
 
 function vgradient(g, y0, y1, color, a) {

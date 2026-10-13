@@ -5,10 +5,11 @@
 // insinúan que son tres.
 
 import { place, sunUV } from '../../engine/stage.js';
-import { mulberry32, paintSky, drawMass, paintMeadow, painterly, paintStreaks, applyPaper, renderMass, makeRamp, makeCanvas, fillBlob, css, mix, glow, MEADOW_DAY } from '../../engine/paint.js';
+import { mulberry32, paintSky, drawMass, painterly, paintStreaks, applyPaper, makeCanvas, fillBlob, blade, css, mix, vary, vgrad, glow } from '../../engine/paint.js';
 import { PAL } from '../../engine/style.js';
 import { clamp, lerp, smooth, smoother, invLerp } from '../../lib/util.js';
-import { paintFlowers, drawWaving, makePetals, drawPetals, ROCK_DAY } from './brushes.js';
+import { drawWaving, makePetals, drawPetals, paintIsle, grassStrip, litCopy } from './brushes.js';
+import { MEADOW_DAY } from '../../engine/paint.js';
 import { STONE, column, arch, steps, block, drum, moss, tuft, vine } from './stone.js';
 import { makeKey, drawKey, drawKeyGlow } from './key.js';
 
@@ -18,6 +19,128 @@ const L = [-0.5, -0.85, 0.35];
 const WIND = { amp: 0.12, bias: 0.4, k: 0.009, speed: 2.2, seed: 1.3 };
 // La llave (coordenadas de pantalla en reposo).
 const KX = 960, KY = 338;
+
+// ─── El islote con las ruinas ──────────────────────────────────────────────
+// Se pinta a 1,25× porque la cámara se acerca hasta 1,24×.
+const RES = 1.25;
+const OX = 300, OY = 70, OW = 1320, OH = 760;
+const CAPX = 960, CAPY = 560, CAPRX = 612, CAPRY = 66;
+const GRASS = { far: '#c2e66c', mid: '#97ce48', near: '#62ad30', dark: '#2f7428', lit: '#d9f27e', hi: '#f0fba6' };
+export const SHRINE_LAYER = { RES, OX, OY, OW, OH };
+
+// Tapa de prado vista desde poco más arriba: matas finas que crecen hacia
+// delante, ondulaciones de luz, florecillas a la deriva y el canto delantero
+// que se curva hacia la sombra. Coordenadas de capa (antes de RES).
+function paintCapMeadow(g, rng, rimK) {
+  const x0 = CAPX - CAPRX - 20, y0 = CAPY - CAPRY - 12, w = CAPRX * 2 + 40, h = CAPRY * 2 + 24;
+  // depth(y): 0 en el borde de atrás, 1 en el canto delantero.
+  const depth = (y) => clamp((y - (CAPY - CAPRY)) / (CAPRY * 2));
+  g.fillStyle = vgrad(g, 0, y0, 0, y0 + h, [[0, GRASS.far], [0.5, GRASS.mid], [1, GRASS.near]]);
+  g.fillRect(x0, y0, w, h);
+  // Luz de la izquierda y sombra a la derecha (la isla es una cúpula muy plana).
+  g.fillStyle = vgrad(g, x0, 0, x0 + w, 0, [[0, GRASS.hi, 0.3], [0.35, GRASS.hi, 0.06], [0.62, GRASS.dark, 0], [1, GRASS.dark, 0.32]]);
+  g.fillRect(x0, y0, w, h);
+  // Ondulaciones del terreno: manchas largas y planas de luz y sombra.
+  for (let i = 0; i < 70; i++) {
+    const x = x0 + rng() * w, y = y0 + rng() * h, d = depth(y);
+    fillBlob(g, x, y, lerp(30, 110, d) * (0.6 + rng()), lerp(3, 9, d), rng() < 0.5 ? GRASS.dark : GRASS.lit, 0.13, { wobble: 0.4, seed: i, freq: 2.2 });
+  }
+  // Matas: abanicos de briznas, diminutas al fondo y algo mayores delante.
+  const nm = Math.round(w * h / 26);
+  for (let i = 0; i < nm; i++) {
+    const y = y0 + rng() * h, x = x0 + rng() * w, d = depth(y);
+    const size = lerp(2.2, 7.5, d * d) * (0.7 + rng() * 0.6);
+    const base = d < 0.5 ? mix(GRASS.far, GRASS.mid, d * 2) : mix(GRASS.mid, GRASS.near, d * 2 - 1);
+    const r = rng();
+    const c = r < 0.3 ? mix(base, GRASS.dark, 0.5) : r < 0.72 ? vary(base, rng, 0.06) : mix(base, GRASS.lit, 0.5 + rng() * 0.4);
+    const k = 2 + Math.floor(rng() * 3);
+    for (let j = 0; j < k; j++) blade(g, x + (j - k / 2) * size * 0.25, y, size * (0.7 + rng() * 0.6), Math.max(0.7, size * 0.18), (j / k - 0.45) * size * 0.9 + size * 0.15, c, 0.9, i + j);
+  }
+  // Puntas de luz.
+  for (let i = 0; i < nm * 0.25; i++) {
+    const y = y0 + rng() * h, x = x0 + rng() * w, d = depth(y);
+    const size = lerp(2, 6, d * d);
+    blade(g, x, y, size, Math.max(0.6, size * 0.14), (rng() - 0.3) * size * 0.6, rng() < 0.6 ? GRASS.lit : GRASS.hi, 0.8, i * 0.3);
+  }
+  // Florecillas a la deriva (blancas, amarillas, celestes y melocotón).
+  const FL = [['#fbfaf0', 0.36], ['#f6dc45', 0.34], ['#a9dbee', 0.15], ['#f5a882', 0.15]];
+  for (let i = 0; i < 150; i++) {
+    let r = rng(), col = FL[0][0];
+    for (const [c, wgt] of FL) { if ((r -= wgt) <= 0) { col = c; break; } }
+    const cx = x0 + rng() * w, cy = y0 + rng() * h, d = depth(cy);
+    const spread = lerp(10, 40, d);
+    const m = 3 + Math.floor(rng() * 8);
+    for (let j = 0; j < m; j++) {
+      const s = lerp(0.9, 2.4, d) * (0.7 + rng() * 0.6);
+      fillBlob(g, cx + (rng() - 0.5) * spread * 2, cy + (rng() - 0.5) * spread * 0.3, s, s * 0.7, col, 0.95, { wobble: 0.2, n: 7, seed: j });
+    }
+  }
+  // El canto delantero se curva hacia abajo: franja en sombra fría.
+  g.save();
+  g.fillStyle = vgrad(g, 0, CAPY + CAPRY * 0.35, 0, CAPY + CAPRY, [[0, '#2a6a3a', 0], [0.7, '#2a6a3a', 0.22], [1, '#24563a', 0.42]]);
+  g.fillRect(x0, CAPY, w, CAPRY + 12);
+  g.restore();
+}
+
+export function paintShrineIsle(rng) {
+  const isle = makeCanvas(OW * RES, OH * RES);
+  const ig = isle.getContext('2d');
+  const toLayer = (g) => g.setTransform(RES, 0, 0, RES, -OX * RES, -OY * RES);
+  // Panza de roca, labio colgante y lianas: el mismo pincel que las islas
+  // lejanas (para que todo el cielo hable igual), con muchos más lóbulos y
+  // detalles finos porque esta se ve de cerca.
+  const base = paintIsle(rng, CAPRX * 2 * RES, 340 * RES, {
+    light: L, ry: CAPRY * RES, wobble: 0.03, facets: 26,
+    topPad: 30 * RES, padK: 0.04, seed: 23, fine: 0.3, hangK: 0.75, hangLen: 0.5,
+  });
+  const dx = Math.round((CAPX - OX) * RES - base.anchor[0]), dy = Math.round((CAPY - OY) * RES - base.anchor[1]);
+  ig.drawImage(base, dx, dy);
+  // Tapa de prado recortada con el mismo contorno.
+  ig.save();
+  ig.setTransform(1, 0, 0, 1, dx, dy);
+  ig.clip(base.cap.path);
+  toLayer(ig);
+  paintCapMeadow(ig, rng, base.cap.rimK);
+  ig.restore();
+  toLayer(ig);
+  // Sombras de las ruinas sobre la hierba (la luz viene de delante a la izquierda).
+  for (const [x, y, w] of [[600, 548, 90], [1312, 548, 95], [1465, 590, 70], [458, 590, 60]]) fillBlob(ig, x + w * 0.45, y - 4, w, 12, '#2f6d22', 0.35, { wobble: 0.2, seed: x });
+  // Losas del suelo alrededor del estrado.
+  for (let i = 0; i < 26; i++) {
+    const x = lerp(640, 1280, rng()), y = lerp(536, 600, rng());
+    fillBlob(ig, x, y, 18 + rng() * 22, 5 + rng() * 4, mix(STONE.lit, STONE.mid, rng()), 0.9, { wobble: 0.15, n: 10, seed: i });
+  }
+  // Fila de atrás: columna rota a la izquierda y columna con capitel y
+  // arquitrabe a la derecha.
+  column(ig, rng, 600, 548, 300, 28, { broken: 0.6, vines: 2 });
+  column(ig, rng, 1312, 548, 330, 29, { lintel: -1, vines: 1 });
+  // Estrado.
+  block(ig, rng, 700, 522, 520, 76, 30, { joints: 6, mossTop: 2, skew: [0.9, -0.9] });
+  // Arco sobre el estrado (le faltan dovelas arriba a la derecha).
+  arch(ig, rng, 960, 330, 157, 48, 182, { gap: [0.38, 1.12], vines: 5 });
+  // Altar: pedestal bajo con una losa encima.
+  column(ig, rng, 960, 512, 64, 21, { mossK: 0.6 });
+  // Escalinata hasta el estrado.
+  steps(ig, rng, 960, 612, 5, 300, 250, 18, 9);
+  // Fila de delante: tocón a la izquierda y columna inclinada a la derecha.
+  column(ig, rng, 458, 592, 120, 27, { broken: 1.0, lean: -0.04, mossK: 1.3 });
+  column(ig, rng, 1465, 592, 190, 27, { broken: -0.8, lean: 0.07, vines: 1, mossK: 1.2 });
+  drum(ig, rng, 1150, 612, 92, 22, { dir: 1 });
+  block(ig, rng, 690, 612, 66, 26, 12, { mossTop: 1 });
+  block(ig, rng, 752, 618, 40, 20, 10, { mossTop: 0.6 });
+  // Matas al pie de las piedras y en el canto.
+  for (const [x, y, n] of [[600, 550, 6], [1312, 550, 6], [458, 594, 5], [1465, 594, 5], [700, 600, 4], [1220, 600, 4], [1150, 616, 4], [690, 614, 3]]) {
+    for (let i = 0; i < n; i++) tuft(ig, rng, x + (rng() - 0.5) * 70, y + rng() * 4, 8 + rng() * 12);
+  }
+  for (let i = 0; i < 46; i++) {
+    const a = Math.PI * (0.04 + rng() * 0.92);
+    const k = base.cap.rimK(a) * 0.97;
+    tuft(ig, rng, CAPX + Math.cos(a) * CAPRX * k, CAPY + Math.sin(a) * CAPRY * k + 2, 7 + rng() * 11);
+  }
+  ig.setTransform(1, 0, 0, 1, 0, 0);
+  painterly(isle, { seed: 31, size: 5 * RES, alpha: 0.3, stretch: 1.8, soften: 0.6, density: 0.55 });
+  return isle;
+}
 
 export async function buildShrine(env, shared) {
   const rng = mulberry32(3011);
@@ -55,103 +178,26 @@ export async function buildShrine(env, shared) {
   }
 
   // ─── El islote con las ruinas (profundidad 1, pintado a 1,25×) ────────────
-  const RES = 1.25;
-  const OX = 300, OY = 70, OW = 1320, OH = 760;
-  const isle = makeCanvas(OW * RES, OH * RES);
-  const ig = isle.getContext('2d');
-  const toLayer = (g) => g.setTransform(RES, 0, 0, RES, -OX * RES, -OY * RES);
-  // Panza de roca: masa ancha que se estrecha hacia abajo.
-  {
-    const bw = 1240, bh = 330, bx = 960, by = 570;
-    const puffs = [];
-    for (let i = 0; i < 16; i++) {
-      const t = i / 15;
-      const width = bw * 0.5 * Math.pow(1 - t, 0.8);
-      const k = Math.max(1, Math.round(9 * (1 - t)) + 1);
-      for (let j = 0; j < k; j++) {
-        const f = k === 1 ? 0 : (j / (k - 1) - 0.5) * 2;
-        const r = Math.max(6, width * (0.2 + rng() * 0.1));
-        puffs.push({ x: bx + f * width * 0.85 - OX, y: by + t * bh - OY, rx: r * 0.9, ry: r * 1.3, z: (1 - Math.abs(f)) * r * 0.4 + (1 - t) * 30 });
-      }
-    }
-    const ramp = makeRamp([[0, ROCK_DAY.deep], [0.3, ROCK_DAY.shade], [0.52, ROCK_DAY.mid], [0.72, ROCK_DAY.lit], [0.9, ROCK_DAY.hi]], 2.0);
-    const belly = renderMass(OW, OH, puffs, {
-      light: L, ramp, sharpK: 0.08, edgeAmp: 0.16, edgeFreq: 0.03, brushAmp: 0.15, brushFreq: 0.035, brushStretch: 6,
-      ao: 0.6, aoRadius: 10, aoRange: 16, bump: 1.3, wrap: 0.3, seed: 5, vertical: { top: by - OY, bottom: by + bh - OY, amount: 0.35 },
-    });
-    ig.drawImage(belly, 0, 0, OW * RES, OH * RES);
-  }
-  toLayer(ig);
-  // Tapa de hierba (elipse) con prado fino: se pinta a escala reducida para
-  // que las matas salgan pequeñas, y se recorta con la elipse.
-  const CAPX = 960, CAPY = 560, CAPRX = 612, CAPRY = 66;
-  {
-    const cw = CAPRX * 2, ch = CAPRY * 2 + 30;
-    const cap = makeCanvas(cw * RES, ch * RES);
-    const g = cap.getContext('2d');
-    const k = 0.42 * RES;
-    g.scale(k, k);
-    paintMeadow(g, rng, 0, 0, cw * RES / k, ch * RES / k, { pal: { ...MEADOW_DAY, far: '#b4e05c', near: '#6dbb2e' }, density: 0.55, lean: 0.12, flowers: 1.2 });
-    g.setTransform(RES, 0, 0, RES, 0, 0);
-    paintFlowers(g, rng, 0, 10, cw, ch - 10, { n: 900, near: 4.5, far: 1.2, seed: 8 });
-    // Sombra en la parte delantera de la tapa (el canto se curva hacia abajo).
-    const gr = g.createLinearGradient(0, ch * 0.55, 0, ch);
-    gr.addColorStop(0, 'rgba(30,90,30,0)'); gr.addColorStop(1, 'rgba(30,90,30,0.45)');
-    g.fillStyle = gr; g.fillRect(0, 0, cw, ch);
-    g.globalCompositeOperation = 'destination-in';
-    g.beginPath(); g.ellipse(CAPRX, CAPRY + 6, CAPRX, CAPRY, 0, 0, Math.PI * 2); g.fill();
-    // Labio colgante bajo la tapa.
-    ig.fillStyle = '#3f7f2c';
-    ig.beginPath(); ig.ellipse(CAPX, CAPY + 14, CAPRX + 4, CAPRY + 6, 0, 0, Math.PI * 2); ig.fill();
-    ig.drawImage(cap, CAPX - CAPRX, CAPY - CAPRY - 6, cw, ch);
-  }
-  // Briznas colgantes y lianas en el canto delantero.
-  for (let i = 0; i < 240; i++) {
-    const a = Math.PI * (0.03 + rng() * 0.94);
-    const x = CAPX + Math.cos(a) * CAPRX * 1.0, y = CAPY + 14 + Math.sin(a) * (CAPRY + 6);
-    tuft(ig, rng, x, y + 4, -(6 + rng() * 10), { a: '#2f6a25', b: '#3f7f2c', c: '#5c9a38' });
-  }
-  for (let i = 0; i < 14; i++) {
-    const a = Math.PI * (0.1 + rng() * 0.8);
-    vine(ig, rng, CAPX + Math.cos(a) * CAPRX * 0.98, CAPY + 16 + Math.sin(a) * CAPRY, 40 + rng() * 110, { sway: (rng() - 0.5) * 20, leaves: 0.7 });
-  }
-  // Sombras de las ruinas sobre la hierba (la luz viene de delante a la izquierda).
-  for (const [x, y, w] of [[600, 548, 90], [1312, 548, 95], [1465, 590, 70], [458, 590, 60]]) fillBlob(ig, x + w * 0.45, y - 4, w, 12, '#2f6d22', 0.35, { wobble: 0.2, seed: x });
-  // Losas del suelo alrededor del estrado.
-  for (let i = 0; i < 26; i++) {
-    const x = lerp(640, 1280, rng()), y = lerp(536, 600, rng());
-    fillBlob(ig, x, y, 18 + rng() * 22, 5 + rng() * 4, mix(STONE.lit, STONE.mid, rng()), 0.9, { wobble: 0.15, n: 10, seed: i });
-  }
-  // Fila de atrás: columna rota a la izquierda y columna con capitel y
-  // arquitrabe a la derecha.
-  column(ig, rng, 600, 548, 300, 28, { broken: 0.6, vines: 2 });
-  column(ig, rng, 1312, 548, 330, 29, { lintel: -1, vines: 1 });
-  // Estrado.
-  block(ig, rng, 700, 522, 520, 76, 30, { joints: 6, mossTop: 2, skew: [0.9, -0.9] });
-  // Arco sobre el estrado (le faltan dovelas arriba a la derecha).
-  arch(ig, rng, 960, 330, 157, 48, 182, { gap: [0.38, 1.12], vines: 5 });
-  // Altar: pedestal bajo con una losa encima.
-  column(ig, rng, 960, 512, 64, 21, { mossK: 0.6 });
-  // Escalinata hasta el estrado.
-  steps(ig, rng, 960, 612, 5, 300, 250, 18, 9);
-  // Fila de delante: tocón a la izquierda y columna inclinada a la derecha.
-  column(ig, rng, 458, 592, 120, 27, { broken: 1.0, lean: -0.04, mossK: 1.3 });
-  column(ig, rng, 1465, 592, 190, 27, { broken: -0.8, lean: 0.07, vines: 1, mossK: 1.2 });
-  drum(ig, rng, 1150, 612, 92, 22, { dir: 1 });
-  block(ig, rng, 690, 612, 66, 26, 12, { mossTop: 1 });
-  block(ig, rng, 752, 618, 40, 20, 10, { mossTop: 0.6 });
-  for (let i = 0; i < 40; i++) {
-    const a = Math.PI * (0.05 + rng() * 0.9);
-    tuft(ig, rng, CAPX + Math.cos(a) * CAPRX * 0.95, CAPY + Math.sin(a) * CAPRY * 0.9, 10 + rng() * 16);
-  }
-  ig.setTransform(1, 0, 0, 1, 0, 0);
-  painterly(isle, { seed: 31, size: 5 * RES, alpha: 0.3, stretch: 1.8, soften: 0.6, density: 0.55 });
+  const isle = paintShrineIsle(rng);
 
   // ─── La llave ─────────────────────────────────────────────────────────────
   const key = makeKey(340);
   const motes = [];
   for (let i = 0; i < 70; i++) motes.push({ x: rng(), y: rng(), s: 1 + rng() * 2.6, v: 8 + rng() * 20, ph: rng() * 6.28, tw: 1 + rng() * 3 });
   const petals = makePetals(rng, 26, { y0: 120, y1: 700, sMin: 3, sMax: 9 });
+  // Primer término: hierba alta de lado a lado (la del acantilado acaba en el borde).
+  const fBase = (x) => 330 + Math.sin(x * 0.004) * 14 + Math.sin(x * 0.011 + 1) * 6;
+  const fg = grassStrip(rng, 2400, 420, fBase, { pal: { ...MEADOW_DAY, near: mix(MEADOW_DAY.near, MEADOW_DAY.dark, 0.25) }, count: 1100, hMin: 40, hMax: 150, lean: 0.25, fill: true, tuft: 5, flowers: 110, flowerSize: [7, 17] });
+  {
+    const g = fg.canvas.getContext('2d');
+    g.globalCompositeOperation = 'source-atop';
+    for (const [x, a] of [[300, 0.55], [2100, 0.45]]) {
+      const gr = g.createRadialGradient(x, 420, 30, x, 420, 700);
+      gr.addColorStop(0, `rgba(10,52,20,${a})`); gr.addColorStop(0.6, `rgba(14,66,24,${a * 0.35})`); gr.addColorStop(1, 'rgba(14,66,24,0)');
+      g.fillStyle = gr; g.fillRect(0, 0, 2400, 420);
+    }
+  }
+  const fgLit = litCopy(fg, '#e8ff9a', 0.35);
   const bokeh = shared.bokeh;
 
   return function shrine(f) {
@@ -159,7 +205,8 @@ export async function buildShrine(env, shared) {
     const t = lt;
     g.imageSmoothingQuality = 'low';
     Object.assign(post, P.post);
-    post.bloom = 0.42; post.threshold = 0.74; post.vignette = 0.42;
+    post.bloom = 0.3; post.threshold = 0.9; post.vignette = 0.42;
+    f.stage.setGlowGain(1.15);
     // Travelling lento hacia la llave.
     const e = smoother(u);
     const zoom = lerp(1.0, 1.24, e);
@@ -170,15 +217,15 @@ export async function buildShrine(env, shared) {
     // Dos siluetas de llave tenues que aparecen en el cielo al final.
     const ghost = smooth(invLerp(0.68, 0.95, u));
     if (ghost > 0) {
-      for (const [x, y, k, a0] of [[420, 170, 0.32, 0.4], [1530, 128, 0.28, 2.1]]) {
+      for (const [x, y, k, a0] of [[420, 170, 0.62, 0.4], [1530, 128, 0.56, 2.1]]) {
         const ang = a0 + t * 0.5;
-        drawKey(g, key, x, y + Math.sin(t * 1.1 + a0) * 4, ang, k * 0.5, { alpha: ghost * 0.35 });
+        const yy = y + Math.sin(t * 1.1 + a0) * 4;
+        drawKey(g, key, x, yy, ang, k * 0.5, { alpha: ghost * 0.5 });
         at(8, f.glow);
-        drawKeyGlow(f.glow, key, x, y, ang, k * 0.5, ghost * 0.5);
-        glow(f.glow, x, y, 70, '#ffd27a', ghost * 0.25);
+        drawKeyGlow(f.glow, key, x, yy, ang, k * 0.5, ghost * 0.35);
+        at(8);
       }
     }
-    // El mar compartido tiene su horizonte a 0,22 × 360 px de su borde superior.
     at(4); g.drawImage(shared.sea, -40, 486 - 79);
     at(3.4); g.drawImage(far, FIX, FIY);
     at(1); g.drawImage(isle, OX, OY, OW, OH);
@@ -223,20 +270,16 @@ export async function buildShrine(env, shared) {
     // La llave: gira despacio (escala x con cos), sube y baja, y brilla.
     const ky = KY + Math.sin(t * 1.4) * 9;
     const ang = 0.5 + t * 0.62;
-    g.save();
-    g.globalCompositeOperation = 'screen';
-    glow(g, KX, ky, 240, '#ffd98a', 0.28 * pulse);
-    g.restore();
+    // Solo el resplandor que sigue la silueta (sin halo redondo).
     drawKey(g, key, KX, ky, ang, 0.5);
-    glow(f.glow, KX, ky, 200, '#ffcf6a', 0.32 * pulse);
-    drawKeyGlow(f.glow, key, KX, ky, ang, 0.5, 0.55 * pulse);
+    drawKeyGlow(f.glow, key, KX, ky, ang, 0.5, 0.2 * pulse);
     // Destello que recorre la llave al girar.
     const flash = Math.pow(Math.max(0, Math.cos(ang * 2)), 24);
-    if (flash > 0.02) glow(f.glow, KX - 18, ky - 50, 60, '#ffffff', flash * 0.7);
+    if (flash > 0.02) glow(f.glow, KX - 18, ky - 50, 40, '#ffffff', flash * 0.35);
 
     // Primer término: la hierba del acantilado vecino.
-    at(0.65);
-    drawWaving(g, shared.fg, -260, 488, t + 3, WIND, shared.fgLit, { cw: 10 });
+    at(0.75);
+    drawWaving(g, fg, -240, 470, t + 3, WIND, fgLit, { cw: 10 });
     drawPetals(g, petals, t * 0.6, { alpha: 0.9 });
     at(0.5);
     g.save(); g.translate(2080, 0); g.scale(-1, 1); g.drawImage(bokeh, -40, 470); g.restore();
@@ -245,7 +288,7 @@ export async function buildShrine(env, shared) {
     f.glow.setTransform(1, 0, 0, 1, 0, 0);
     applyPaper(g, env.paper, 0.1);
     // Rayos de sol desde lo alto del haz.
-    post.rays = 0.32; post.sun = sunUV(950, 30); post.raysDecay = 0.955; post.raysDensity = 0.9;
+    post.rays = 0.22; post.sun = sunUV(950, 30); post.raysDecay = 0.955; post.raysDensity = 0.9;
     g.imageSmoothingQuality = 'high';
   };
 }

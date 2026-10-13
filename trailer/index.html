@@ -1,0 +1,122 @@
+<title>Kumo: Más allá de la lluvia</title>
+<meta name="description" content="Tráiler de Kumo: Más allá de la lluvia. Una chica de un pueblo gris se fabrica unas gafas de chatarra y despierta en un mundo encima de las nubes.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600&family=Cormorant+Garamond:ital,wght@0,400;0,500;1,300;1,400&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@600&text=%E9%9B%B2&display=swap">
+<style>
+  /* Sala de cine: todo gira en torno al fotograma 16:9 y su banda negra. Un solo tema oscuro a propósito. */
+  :root {
+    --night: #07080b;
+    --ink: #0d1016;
+    --paper: #f4efe4;
+    --mist: #b9c2cf;
+    --gold: #e9c98a;
+    --sky: #8fc6e8;
+    --font-title: "Cinzel", "Trajan Pro", Georgia, serif;
+    --font-text: "Cormorant Garamond", "EB Garamond", Georgia, serif;
+    --font-kanji: "Shippori Mincho", "Hiragino Mincho ProN", "Yu Mincho", serif;
+    color-scheme: dark;
+  }
+  html, body { height: 100%; }
+  body { background: var(--night); color: var(--paper); overflow: hidden; font-family: var(--font-text); }
+  .stage { position: fixed; inset: 0; display: grid; place-items: center; background: var(--night); }
+  .frame {
+    position: relative; width: min(100vw, calc(100vh * 16 / 9)); aspect-ratio: 16 / 9; max-width: 100%;
+    background: #000; overflow: hidden; container-type: size;
+  }
+  #gl { position: absolute; left: 0; top: 12.963%; width: 100%; height: 74.074%; display: block; }
+  .captions { position: absolute; left: 0; right: 0; top: 12.963%; height: 74.074%; pointer-events: none; }
+  .cap {
+    position: absolute; left: 8%; right: 8%; bottom: 13%; margin: 0; text-align: center;
+    font: italic 300 2.55cqw/1.25 var(--font-text); letter-spacing: 0.02em; color: var(--paper);
+    text-shadow: 0 0 1.2cqw rgba(0, 0, 0, 0.55), 0 0.1cqw 0.3cqw rgba(0, 0, 0, 0.6);
+    opacity: 0; text-wrap: balance;
+  }
+  .cap.dark { color: #fffaf0; }
+  .title { position: absolute; inset: 12.963% 0; display: grid; place-content: center; text-align: center; pointer-events: none; }
+  .title .kanji {
+    margin: 0 0 1.2cqw; font: 600 3.4cqw/1 var(--font-kanji); color: var(--gold); opacity: 0;
+    text-shadow: 0 0 1.4cqw rgba(255, 210, 140, 0.55);
+  }
+  .title h1 {
+    margin: 0; font: 500 9.6cqw/1 var(--font-title); letter-spacing: 0.42em; padding-left: 0.42em;
+    color: #fff8ea; text-shadow: 0 0 2.4cqw rgba(255, 220, 160, 0.55), 0 0 0.6cqw rgba(255, 240, 210, 0.6);
+  }
+  .title h1 span { display: inline-block; opacity: 0; }
+  .title .sub { margin: 1.6cqw 0 0; font: 400 1.75cqw/1 var(--font-title); letter-spacing: 0.46em; padding-left: 0.46em; color: #fff3df; opacity: 0; text-shadow: 0 0 1cqw rgba(0, 0, 0, 0.45); }
+  .title .rule { width: 0; height: 1px; margin: 1.9cqw auto 1.5cqw; background: linear-gradient(90deg, transparent, var(--gold), transparent); }
+  .title .tag { margin: 0; font: italic 400 2.2cqw/1.3 var(--font-text); color: var(--paper); opacity: 0; letter-spacing: 0.03em; }
+  .title .soon { margin: 2.2cqw 0 0; font: 400 1.25cqw/1 var(--font-title); letter-spacing: 0.6em; padding-left: 0.6em; color: var(--gold); opacity: 0; }
+
+  .intro {
+    position: absolute; inset: 0; display: grid; place-content: center; gap: 2.2cqw; text-align: center;
+    background: radial-gradient(ellipse at 50% 60%, #1b2433 0%, var(--ink) 55%, #000 100%);
+  }
+  .intro .kicker { margin: 0; font: 400 1.2cqw/1 var(--font-title); letter-spacing: 0.5em; padding-left: 0.5em; color: var(--mist); }
+  .intro h2 { margin: 0; font: 500 6cqw/1 var(--font-title); letter-spacing: 0.3em; padding-left: 0.3em; color: var(--paper); }
+  .intro p.note { margin: 0; font: italic 400 1.7cqw/1.3 var(--font-text); color: var(--mist); }
+  .play {
+    justify-self: center; display: inline-flex; align-items: center; gap: 0.9cqw;
+    padding: 1.05cqw 2.4cqw; border-radius: 999px; border: 1px solid rgba(233, 201, 138, 0.6);
+    background: rgba(233, 201, 138, 0.08); color: var(--paper);
+    font: 500 1.45cqw/1 var(--font-title); letter-spacing: 0.25em; cursor: pointer;
+    transition: background 0.25s, border-color 0.25s;
+  }
+  .play:hover { background: rgba(233, 201, 138, 0.2); border-color: var(--gold); }
+  .play:focus-visible, .ctrl button:focus-visible { outline: 2px solid var(--sky); outline-offset: 3px; }
+  .play[disabled] { opacity: 0.5; cursor: progress; }
+  .play svg { width: 1.2cqw; height: 1.2cqw; fill: currentColor; }
+  .ctrl {
+    position: absolute; right: 1.6cqw; bottom: 1.4cqw; display: flex; gap: 0.7cqw; flex-wrap: wrap; justify-content: flex-end;
+    opacity: 0; transition: opacity 0.4s;
+  }
+  .frame:hover .ctrl, .ctrl:focus-within { opacity: 1; }
+  .ctrl button {
+    min-height: 32px; padding: 0.5cqw 1.1cqw; border-radius: 999px; border: 1px solid rgba(244, 239, 228, 0.35);
+    background: rgba(7, 8, 11, 0.55); color: var(--paper); font: 400 max(11px, 0.95cqw)/1 var(--font-title); letter-spacing: 0.15em; cursor: pointer;
+  }
+  .ctrl button:hover { border-color: var(--paper); }
+  .progress { position: absolute; left: 0; bottom: 0; height: 2px; width: 0; background: var(--gold); opacity: 0.6; }
+  @media (max-width: 600px) {
+    .ctrl { opacity: 1; }
+    .intro .play { font-size: 12px; padding: 10px 18px; }
+    .play svg { width: 11px; height: 11px; }
+  }
+  @media (prefers-reduced-motion: reduce) { .ctrl, .play { transition: none; } }
+  body.capture .intro, body.capture .ctrl, body.capture .progress { display: none; }
+</style>
+
+<div class="stage">
+  <div class="frame" id="frame">
+    <canvas id="gl"></canvas>
+    <div class="captions" id="captions"></div>
+    <div class="title" id="title" aria-hidden="true">
+      <p class="kanji" id="title-kanji" lang="ja">雲</p>
+      <h1 id="title-word"></h1>
+      <p class="sub" id="title-sub">MÁS ALLÁ DE LA LLUVIA</p>
+      <div class="rule" id="title-rule"></div>
+      <p class="tag" id="title-tag">Hay un mundo encima de las nubes.</p>
+      <p class="soon" id="title-soon">PRÓXIMAMENTE</p>
+    </div>
+    <div class="progress" id="progress"></div>
+    <div class="ctrl" id="ctrl" hidden>
+      <button type="button" id="btn-replay">Repetir</button>
+      <button type="button" id="btn-mute">Sonido: sí</button>
+      <button type="button" id="btn-full">Pantalla completa</button>
+    </div>
+    <div class="intro" id="intro">
+      <p class="kicker">TRÁILER · 1:00</p>
+      <h2>KUMO</h2>
+      <p class="kicker">MÁS ALLÁ DE LA LLUVIA</p>
+      <p class="note" id="intro-note">Construyendo el mundo…</p>
+      <button type="button" class="play" id="btn-play" disabled>
+        <svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2 1 L9 5 L2 9 Z"/></svg>
+        VER TRÁILER
+      </button>
+    </div>
+  </div>
+</div>
+
+<script type="importmap">{ "imports": { "three": "./vendor/three.module.min.js" } }</script>
+<script type="module" src="./src/main.js"></script>

@@ -150,7 +150,7 @@ export async function build(env) {
         }
         f.glow.globalCompositeOperation = 'source-over';
         applyPaper(g, env.paper, 0.08);
-        post.zoom = 0.1; post.zoomCenter = [0.5, 0.5];
+        post.zoom = 0.04; post.zoomCenter = [0.5, 0.5];
         // Sale del fogonazo cian y acaba en blanco total.
         const fin = smooth(invLerp(0.78, 1, u));
         post.flash = Math.max(1 - smooth(invLerp(0, 0.5, t)), fin);

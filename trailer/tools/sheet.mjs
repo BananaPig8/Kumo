@@ -21,7 +21,7 @@ for (const s of shots) {
     const T = s.start + (s.end - s.start) * f;
     await page.evaluate((T) => window.trailer.renderAt(T), T);
     const file = path.join(out, `f${String(k++).padStart(3, '0')}.png`);
-    await page.screenshot({ path: file, clip: { x: 0, y: 140, width: 1920, height: 800 } });
+    await page.screenshot({ path: file, clip: { x: 0, y: 140, width: 1920, height: 800 }, timeout: 600000 });
     console.log(`${s.name} t=${T.toFixed(2)} → ${file}`);
   }
 }

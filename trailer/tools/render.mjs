@@ -39,7 +39,7 @@ async function renderChunk(id, f0, f1) {
   for (let f = f0; f < f1; f++) {
     const T = f / FPS;
     await page.evaluate((T) => window.trailer.renderAt(T), T);
-    const png = await page.screenshot({ type: 'png' });
+    const png = await page.screenshot({ type: 'png', timeout: 600000 });
     if (!ff.stdin.write(png)) await new Promise((r) => ff.stdin.once('drain', r));
     if ((f - f0) % 24 === 0) {
       const el = (Date.now() - t0) / 1000;

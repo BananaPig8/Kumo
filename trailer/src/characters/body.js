@@ -17,73 +17,95 @@ const sh = (c, k = 0.78) => celShadow(c, k);
 const widths = (k, a = 5, b = 3) => [Math.max(a, 1.25 / k), Math.max(b, 0.75 / k)];
 
 // ─── Sentada de espaldas ────────────────────────────────────────────────────
-export function drawSitting(g, t, { x, y, size, look = 0, hood = true, tint = null, light = null, rim = null }) {
+// Tres cuartos de espaldas, girada un poco a la derecha (facing=-1 la refleja):
+// espalda encorvada, el brazo que abraza las rodillas, la espinilla y la bota
+// asomando por delante, y la capucha con su borde.
+export function drawSitting(g, t, { x, y, size, look = 0, hood = true, tint = null, light = null, rim = null, facing = 1 }) {
   const k = size / 1000;
   const C = toner(tint);
-  const L = lightDir(light);
+  const f = facing >= 0 ? 1 : -1;
+  const L0 = lightDir(light);
+  const L = [L0[0] * f, L0[1]];
   const sxL = L[0] <= 0 ? 1 : -1;
   const [lw, lw2] = widths(k, 5.5, 3);
   look = clamp(look);
   const br = Math.sin(t * TAU / 3.6) * 0.012;
   g.save();
   g.translate(x, y);
-  g.scale(k, k);
+  g.scale(k * f, k);
   g.lineJoin = 'round'; g.lineCap = 'round';
   const coat = C(GIRL.coat), coatSh = C(GIRL.coatShade), coatLine = C(GIRL.coatLine);
+  const navy = C(GIRL.leggings), navySh = C(sh(GIRL.leggings, 0.7));
 
-  // Botas rojas asomando a los lados (pies en la otra vertiente).
-  for (const m of [-1, 1]) {
-    const boot = curve([[m * 128, -10], [m * 170, -16], [m * 196, 4], [m * 186, 26, 1], [m * 120, 24, 1]]);
-    cel(g, boot, C(GIRL.boots), C(sh(GIRL.boots)), L, 8, lw2);
-  }
-  // Cuerpo: espalda encorvada con los codos abiertos (respira).
+  // Pierna de atrás (apenas asoma) y su bota.
+  const farLeg = curve([[84, -140], [118, -186], [150, -180], [164, -120], [176, -40], [150, -36], [136, -104], [110, -134]]);
+  cel(g, farLeg, C(shade(GIRL.leggings, 0.85)), navySh, L, 12, lw2);
+  const farBoot = curve([[142, -54], [180, -58], [192, -22], [222, -4], [224, 14, 1], [140, 16, 1], [138, -20]]);
+  cel(g, farBoot, C(shade(GIRL.boots, 0.85)), C(sh(GIRL.boots)), L, 8, lw2);
+
+  // Espalda encorvada (respira).
   g.save();
   g.scale(1, 1 + br);
-  const by = (v) => v;
-  const body = curve([[0, -262], [70, -258], [118, -236], [140, -196], [158, -150], [176, -112], [170, -82], [160, -60], [170, -20], [186, 14, 1], [90, 22], [0, 26], [-90, 22], [-186, 14, 1], [-170, -20], [-160, -60], [-170, -82], [-176, -112], [-158, -150], [-140, -196], [-118, -236], [-70, -258]].map(([a, b, c]) => [a, by(b), c]));
+  const body = curve([[-6, -274], [-80, -258], [-128, -216], [-152, -154], [-162, -84], [-174, -24], [-194, 14, 1], [-60, 26], [70, 22], [136, 10, 1], [134, -40], [124, -120], [116, -190], [88, -246], [42, -270]]);
   cel(g, body, coat, coatSh, L, 40, lw);
-  // Codos: pliegues del brazo que abraza las rodillas.
-  for (const m of [-1, 1]) {
-    taper(g, [[m * 132, -200], [m * 152, -150], [m * 166, -104]], lw2, coatLine, { a: 0.2, b: 0.6 });
-    taper(g, [[m * 150, -122], [m * 136, -96], [m * 140, -70]], lw2 * 0.9, coatLine, { a: 0.3, b: 0.6 });
-  }
-  // Canesú, costura central y abertura trasera.
-  taper(g, [[-118, -214], [-60, -196], [0, -192], [60, -196], [118, -214]], lw2, coatLine, { a: 0.1, b: 0.9 });
-  taper(g, [[0, -192], [3, -100], [0, -20]], lw2 * 0.9, coatLine, { a: 0.1, b: 0.8 });
-  taper(g, [[0, 24], [2, -20]], lw2, C(INK), { a: 0.2, b: 0.8 });
-  // Tensión de la tela en la espalda encorvada.
-  for (const m of [-1, 1]) taper(g, [[m * 40, -150], [m * 76, -118], [m * 96, -70]], lw2 * 0.8, C(GIRL.coatLine, 0.7), { a: 0.3, b: 0.5 });
-  // Reflejos de plástico mojado en el lado de la luz.
+  // Canesú, costura central, abertura y pliegues de la espalda encorvada.
+  taper(g, [[-124, -210], [-60, -200], [10, -200], [80, -214], [104, -232]], lw2, coatLine, { a: 0.1, b: 0.9 });
+  taper(g, [[0, -200], [4, -100], [0, -20]], lw2 * 0.9, coatLine, { a: 0.1, b: 0.8 });
+  taper(g, [[-2, 24], [0, -24]], lw2, C(INK), { a: 0.2, b: 0.8 });
+  taper(g, [[-150, -150], [-128, -120], [-130, -84]], lw2, coatLine, { a: 0.2, b: 0.6 });
+  taper(g, [[-60, -150], [-96, -110], [-104, -60]], lw2 * 0.8, C(GIRL.coatLine, 0.7), { a: 0.3, b: 0.5 });
+  taper(g, [[50, -150], [80, -110], [92, -64]], lw2 * 0.8, C(GIRL.coatLine, 0.7), { a: 0.3, b: 0.5 });
   clipped(g, body, () => {
-    taper(g, [[-sxL * 112, -226], [-sxL * 136, -186], [-sxL * 150, -140]], 12, 'rgba(255,255,240,0.9)', { a: 0.4, b: 0.6, w0: 0.05, w1: 0.05 });
-    taper(g, [[-sxL * 60, -246], [-sxL * 92, -238]], 8, 'rgba(255,255,240,0.85)', { a: 0.4, b: 0.6, w0: 0.05, w1: 0.05 });
+    taper(g, [[-sxL * 30, -258], [-sxL * 86, -236], [-sxL * 122, -196]], 12, 'rgba(255,255,240,0.9)', { a: 0.4, b: 0.6, w0: 0.05, w1: 0.05 });
+    taper(g, [[-sxL * 146, -130], [-sxL * 152, -90]], 8, 'rgba(255,255,240,0.8)', { a: 0.4, b: 0.6, w0: 0.05, w1: 0.05 });
   });
+  for (const [dx, dy, r] of [[-60, -180, 5], [70, -150, 6], [-110, -60, 5], [30, -70, 4], [-30, -236, 4.5]]) drawDropSmall(g, C, dx, dy, r, L);
   if (rim) crescent(g, body, -L[0] * 10, -L[1] * 10, C(rim));
+
+  // Pierna de delante: espinilla y bota roja.
+  const leg = curve([[96, -150], [132, -200], [172, -190], [190, -124], [206, -42], [176, -36], [158, -110], [130, -144]]);
+  cel(g, leg, navy, navySh, L, 14, lw2);
+  const boot = curve([[166, -58], [210, -62], [222, -24], [258, -6], [262, 16, 1], [164, 18, 1], [162, -22]]);
+  cel(g, boot, C(GIRL.boots), C(sh(GIRL.boots)), L, 10, lw2);
+  fill(g, curve([[164, 6, 1], [262, 6, 1], [262, 16, 1], [164, 18, 1]]), C(shade(GIRL.boots, 0.55)));
+  line(g, boot, lw2);
+  taper(g, [[168, -50], [190, -44], [210, -52]], lw2 * 0.8, C(INK), { a: 0.3, b: 0.7 });
+  // Brazo que abraza las rodillas y la mano sobre la espinilla.
+  const sleeve = curve([[66, -240], [114, -228], [148, -186], [176, -150], [212, -136], [218, -110], [184, -98], [140, -110], [100, -150], [62, -196]]);
+  cel(g, sleeve, coat, coatSh, L, 22, lw);
+  taper(g, [[112, -212], [134, -176], [156, -150]], lw2 * 0.9, coatLine, { a: 0.3, b: 0.6 });
+  taper(g, [[176, -144], [182, -120], [176, -102]], lw2, C(INK), { a: 0.2, b: 0.8 });
+  const hand = curve([[206, -132], [228, -134], [238, -118], [232, -100], [212, -96], [204, -112]]);
+  cel(g, hand, C(GIRL.skin), C(GIRL.skinShade), L, 6, lw2);
+  taper(g, [[222, -126], [230, -112]], lw2 * 0.7, C(INK), { a: 0.3, b: 0.6 });
+  clipped(g, sleeve, () => taper(g, [[-sxL * 0 + 80, -232], [120, -218], [144, -190]], 9, 'rgba(255,255,240,0.85)', { a: 0.4, b: 0.6, w0: 0.05, w1: 0.05 }));
   g.restore();
 
-  // Cabeza: capucha (o pelo) que se inclina hacia atrás al mirar arriba.
-  const hy = -326 + look * 26 - br * 300;
-  const hsy = 1 - look * 0.12;
+  // Cabeza: la capucha se inclina hacia atrás al mirar arriba y su borde
+  // (con un poco de pelo dentro) asoma por la derecha.
+  const hy = -334 + look * 18 - br * 300;
   g.save();
-  g.translate(0, hy);
-  g.rotate(-0.04 * look * sxL);
-  g.scale(1, hsy);
+  g.translate(10, hy + 70);
+  g.rotate(-0.55 * look);
+  g.translate(0, -70);
   if (hood) {
-    // Borde delantero de la capucha que asoma al levantar la cara.
-    if (look > 0.05) {
-      const rimP = curve([[-92, -70], [-50, -112 - 14 * look], [0, -120 - 18 * look], [50, -112 - 14 * look], [92, -70], [60, -96], [0, -104], [-60, -96]]);
-      cel(g, rimP, coat, coatSh, L, 10, lw2);
-    }
-    const hoodP = curve([[0, -112], [62, -104], [104, -66], [118, -10], [112, 40], [92, 74], [52, 92], [0, 98], [-52, 92], [-92, 74], [-112, 40], [-118, -10], [-104, -66], [-62, -104]]);
-    cel(g, hoodP, coat, coatSh, L, 30, lw);
-    // Costura central y fruncido en la nuca.
-    taper(g, [[0, -112], [2, -40], [0, 40], [0, 96]], lw2, coatLine, { a: 0.1, b: 0.9 });
-    for (const m of [-1, 1]) taper(g, [[m * 30, 96], [m * 44, 72], [m * 48, 52]], lw2 * 0.9, coatLine, { a: 0.3, b: 0.6 });
+    const hoodP = curve([[-4, -108], [58, -102], [100, -70], [116, -18], [110, 36], [88, 72], [46, 92], [-6, 96], [-56, 88], [-94, 66], [-114, 28], [-118, -22], [-100, -68], [-60, -100]]);
+    cel(g, hoodP, coat, coatSh, L, 28, lw);
+    // Borde de la capucha (rulo) y dentro, en sombra, un poco de pelo.
+    const inner = curve([[62, -98], [96, -64], [112, -16], [104, 36], [82, 70], [72, 60], [90, 22], [94, -24], [80, -66]]);
+    fill(g, inner, C(mix(celShadow(GIRL.coatShade, 0.66), '#3b2b3a', 0.2)));
+    const hairIn = curve([[80, -60], [92, -20], [88, 22], [76, 56], [70, 40, 1], [80, 10], [80, -30]]);
+    fill(g, hairIn, C(GIRL.hair));
+    line(g, inner, lw2);
+    const rimP = curve([[50, -104], [72, -100], [104, -66], [120, -16], [114, 40], [90, 76], [76, 66], [98, 30], [102, -18], [88, -62], [62, -94]]);
+    cel(g, rimP, coat, coatSh, L, 8, lw2);
+    taper(g, [[0, -108], [-6, -40], [-4, 30], [-2, 94]], lw2, coatLine, { a: 0.1, b: 0.9 });
+    for (const m of [-1, 1]) taper(g, [[m * 26 - 4, 92], [m * 40 - 4, 70], [m * 44 - 4, 50]], lw2 * 0.9, coatLine, { a: 0.3, b: 0.6 });
     clipped(g, hoodP, () => {
-      taper(g, [[-sxL * 28, -96], [-sxL * 72, -76], [-sxL * 96, -36]], 13, 'rgba(255,255,240,0.92)', { a: 0.4, b: 0.6, w0: 0.05, w1: 0.05 });
-      taper(g, [[-sxL * 100, -10], [-sxL * 102, 14]], 7, 'rgba(255,255,240,0.8)', { a: 0.4, b: 0.6, w0: 0.05, w1: 0.05 });
+      taper(g, [[-sxL * 20 - 10, -96], [-sxL * 64 - 10, -78], [-sxL * 92 - 10, -40]], 13, 'rgba(255,255,240,0.92)', { a: 0.4, b: 0.6, w0: 0.05, w1: 0.05 });
+      taper(g, [[-sxL * 104 - 6, -8], [-sxL * 106 - 6, 16]], 7, 'rgba(255,255,240,0.8)', { a: 0.4, b: 0.6, w0: 0.05, w1: 0.05 });
     });
-    for (const [dx, dy, r] of [[34, -60, 6], [-58, 10, 5], [70, 30, 6], [-20, 50, 4.5]]) drawDropSmall(g, C, dx, dy, r, L);
+    for (const [dx, dy, r] of [[24, -60, 6], [-58, 10, 5], [50, 30, 6], [-20, 50, 4.5]]) drawDropSmall(g, C, dx, dy, r, L);
     if (rim) crescent(g, hoodP, -L[0] * 8, -L[1] * 8, C(rim));
   } else {
     const hair = curve([[0, -104], [70, -94], [108, -50], [114, 10], [104, 64], [92, 96, 1], [64, 80], [44, 104, 1], [18, 84], [-6, 106, 1], [-30, 84], [-54, 104, 1], [-76, 82], [-96, 96, 1], [-108, 50], [-114, -10], [-104, -60], [-66, -96]]);
@@ -91,8 +113,6 @@ export function drawSitting(g, t, { x, y, size, look = 0, hood = true, tint = nu
     for (const xx of [-60, -20, 24, 64]) taper(g, [[xx * 0.4, -80], [xx * 0.8, 0], [xx, 80]], lw2, C(HAIR_INK), { a: 0.2, b: 0.5 });
   }
   g.restore();
-  // Unas gotas en la espalda.
-  for (const [dx, dy, r] of [[-60, -180, 5], [96, -120, 6], [-110, -60, 5], [40, -60, 4]]) drawDropSmall(g, C, dx, dy, r, L);
   g.restore();
 }
 
@@ -167,26 +187,33 @@ export function drawStanding(g, t, { x, y, size, wind = 1, windDir = 1, tint = n
     line(g, curve([[bx - 37, -16], [bx + 38, -16]], false), lw2 * 0.8, C(INK));
   }
 
-  // Pantalón corto (aletea un poco) con la sombra del chaleco.
+  // Pantalón corto (aletea un poco) con su sombra en los muslos.
   const shorts = curve([[-96, -566], [96, -566], [110, -500], [124 + fl(1, 3), -430, 1], [72, -422], [14, -440, 1], [0, -454], [-14, -440, 1], [-72, -422], [-124 + fl(2, 3), -430, 1], [-110, -500]]);
-  cel(g, shorts, C(GIRL.shorts), C(sh(GIRL.shorts)), L, 22, lw);
   for (const leg of legs) castShadow(g, moved(shorts, 0, 34), leg, C('#cdb9c0'));
+  cel(g, shorts, C(GIRL.shorts), C(sh(GIRL.shorts)), L, 22, lw);
   taper(g, [[0, -520], [0, -456]], lw2, C(INK), { a: 0.2, b: 0.8 });
 
-  // Brazos: mangas remangadas, antebrazos y manos.
+  // Brazos: el izquierdo cuelga; el derecho, doblado, sujeta la correa por
+  // delante (el antebrazo queda tapado por el cuerpo).
   const sw = Math.sin(t * 1.9) * 3;
   for (const m of [-1, 1]) {
     const M = (p) => [p[0] * m, p[1], p[2]];
-    const fore = curve([[150, -640], [168, -572], [170, -508], [148, -504], [138, -566], [128, -630]].map(M).map(([a, b]) => [a + sw * m * 0.3, b]));
-    cel(g, fore, skin, skinSh, L, 10, lw2);
-    const hand = curve([[136, -512], [172, -514], [176, -478], [166, -452], [148, -446], [134, -470]].map(M).map(([a, b]) => [a + sw * m * 0.3, b]));
-    cel(g, hand, skin, skinSh, L, 8, lw2);
-    taper(g, [[150, -478], [158, -456]].map(M), lw2 * 0.7, C(INK), { a: 0.3, b: 0.6 });
-    const sleeve = curve([[104, -804], [146, -786], [166, -720], [178 + fl(3 + m, 3), -650], [126, -626], [116, -700], [100, -760]].map(M));
+    if (m < 0) {
+      const fore = curve([[150, -644], [166, -590], [166, -520], [146, -516], [138, -580], [126, -632]].map(M).map(([a, b]) => [a - sw * 0.3, b]));
+      cel(g, fore, skin, skinSh, L, 10, lw2);
+      const hand = curve([[140, -524], [166, -526], [172, -500], [168, -474], [156, -460], [142, -466], [136, -490]].map(M).map(([a, b]) => [a - sw * 0.3, b]));
+      cel(g, hand, skin, skinSh, L, 8, lw2);
+      taper(g, [[160, -500], [164, -476]].map(M).map(([a, b]) => [a - sw * 0.3, b]), lw2 * 0.7, C(INK), { a: 0.3, b: 0.6 });
+    } else {
+      const fore = curve([[150, -660], [160, -630], [118, -600], [100, -612], [124, -646]]);
+      cel(g, fore, skin, skinSh, L, 10, lw2);
+    }
+    const elbowY = m < 0 ? -650 : -664;
+    const sleeve = curve([[104, -804], [146, -786], [166, -720], [176 + fl(3 + m, 3), elbowY], [126, elbowY + 22], [116, -700], [100, -760]].map(M));
     cel(g, sleeve, C(GIRL.shirt), C(sh(GIRL.shirt, 0.84)), L, 18, lw);
-    const cuff = curve([[180 + fl(3 + m, 3), -664], [182 + fl(3 + m, 3), -640], [124, -620], [124, -646]].map(M));
+    const cuff = curve([[178 + fl(3 + m, 3), elbowY - 14], [180 + fl(3 + m, 3), elbowY + 10], [124, elbowY + 30], [124, elbowY + 4]].map(M));
     cel(g, cuff, C(GIRL.shirt), C(sh(GIRL.shirt, 0.84)), L, 8, lw2);
-    taper(g, [[132, -740], [150, -700], [154, -668]].map(M), lw2 * 0.8, C(INK), { a: 0.3, b: 0.6 });
+    taper(g, [[132, -740], [150, -700], [154, -672]].map(M), lw2 * 0.8, C(INK), { a: 0.3, b: 0.6 });
   }
 
   // Camisa (cuerpo) y chaleco por encima, con el bajo aleteando.
@@ -211,34 +238,32 @@ export function drawStanding(g, t, { x, y, size, wind = 1, windDir = 1, tint = n
   inked(g, curve([[-156, -562, 1], [-138, -562, 1], [-138, -540, 1], [-156, -540, 1]].map(([a, b, c]) => [a + fl(9, 2), b, c])), C(GIRL.brass), lw2 * 0.8);
   castShadow(g, moved(bag, 6, 10), shorts, C('#cdb9c0'));
 
-  // Bufanda enrollada al cuello y nudo.
-  const wrap = curve([[-82, -836], [0, -852], [82, -836], [96, -804], [64, -774], [0, -768], [-64, -774], [-96, -804]].map(([a, b]) => [a, b + br]));
+  // Bufanda enrollada al cuello (el pelo cae por encima).
+  const wrap = curve([[-96, -830], [-40, -846], [10, -848], [64, -842], [100, -826], [108, -798], [72, -776], [0, -770], [-72, -776], [-108, -800]].map(([a, b]) => [a, b + br]));
   cel(g, wrap, C(GIRL.scarf), C(GIRL.scarfShade), L, 14, lw);
-  for (const xx of [-50, -10, 30]) taper(g, [[xx, -840 + br], [xx + 12, -808 + br], [xx + 6, -776 + br]], lw2 * 0.8, C(INK), { a: 0.3, b: 0.5 });
+  taper(g, [[-100, -806 + br], [-30, -812 + br], [40, -810 + br], [102, -804 + br]], lw2 * 0.9, C(INK), { a: 0.3, b: 0.7 });
 
-  // Cabeza de espaldas: mejilla asomando, gafas en la cabeza y media melena.
+  // Cabeza de espaldas (algo más pequeña que el cuerpo de dibujo: 1/5,6 de
+  // la altura): mejilla asomando, gafas en la cabeza y media melena al viento.
+  g.save();
+  g.translate(0, -812); g.scale(0.9, 0.9); g.translate(0, 812);
   const hx = face * 6;
   if (face) {
-    const cheek = curve([[face * 92, -906], [face * 120, -872], [face * 116, -838], [face * 96, -826]]);
+    const cheek = curve([[face * 92, -912], [face * 122, -876], [face * 118, -840], [face * 98, -828]]);
     cel(g, cheek, skin, skinSh, L, 6, lw2);
   }
-  // Copas de las gafas (asoman por encima de la coronilla) y antena.
-  for (const m of [-1, 1]) {
-    const cup = ell(hx + m * 42, -994, 40, 20);
-    cel(g, cup, C(GIRL.copper), C(sh(GIRL.copper, 0.7)), L, 6, lw2);
-  }
   const sway = Math.sin(t * 3.1) * 0.08 * (0.4 + W) - D * W * 0.12;
-  const ax0 = hx + 70, ay0 = -1004;
-  const atx = ax0 + Math.sin(0.35 + sway) * 120, aty = ay0 - Math.cos(0.35 + sway) * 120;
+  const ax0 = hx + 62, ay0 = -1000;
+  const atx = ax0 + Math.sin(0.3 + sway) * 130, aty = ay0 - Math.cos(0.3 + sway) * 130;
   taper(g, [[ax0, ay0], [lerp(ax0, atx, 0.5) - 3, lerp(ay0, aty, 0.5)], [atx, aty]], Math.max(4, 1.6 / k), C(INK), { w0: 1, w1: 0.7 });
   inked(g, ell(atx, aty, 9), C(GIRL.antennaTip), lw2);
   fill(g, ell(atx - 3, aty - 3, 3), '#ffffff');
-  const hairPts = [[0, -1004], [70, -994], [110, -948], [120, -884], [116, -836], [104, -802, 1], [82, -822], [62, -796, 1], [38, -820], [12, -792, 1], [-14, -818], [-40, -796, 1], [-62, -822], [-86, -800, 1], [-106, -834], [-118, -884], [-112, -948], [-72, -994]]
-    .map(([a, b, c], i) => [hx + a + (b > -860 ? fl(i, 10 + (b + 860) * -0.3) : 0), b, c]);
+  // Media melena: pocos mechones grandes; las puntas se van con el viento.
+  const hairPts = [[0, -1006], [68, -998], [110, -958], [124, -898], [122, -846], [114, -804, 1], [90, -822], [64, -812], [40, -800], [14, -820], [-14, -802], [-42, -820], [-70, -806], [-96, -826], [-112, -806, 1], [-122, -850], [-120, -920], [-100, -972], [-60, -998]]
+    .map(([a, b, c]) => { const u = clamp((b + 880) / 80); return [hx + a + D * W * u * (6 + 7 * Math.sin(t * 7.3 + a * 0.025)), b - W * u * 4 * Math.sin(t * 6.1 + a * 0.04), c]; });
   const hair = curve(hairPts);
   cel(g, hair, C(GIRL.hair), C(GIRL.hairShade), L, 26, lw, C(HAIR_INK));
-  for (const [x0, x1] of [[-70, -92], [-24, -40], [22, 30], [66, 84]]) taper(g, [[hx + x0 * 0.5, -985], [hx + x0, -920], [hx + x1 + fl(x0, 8), -830]], lw2, C(HAIR_INK), { a: 0.2, b: 0.5 });
-  // Brillo del pelo.
+  for (const [x0, x1] of [[-62, -96], [-18, -42], [28, 14], [72, 90]]) taper(g, [[hx + x0 * 0.4, -990], [hx + x0, -920], [hx + x1 + D * W * 8, -824]], lw2, C(HAIR_INK), { a: 0.2, b: 0.5 });
   clipped(g, hair, () => {
     for (let i = 0; i < 4; i++) {
       const a0 = -2.6 + i * 0.28, a1 = a0 + 0.2;
@@ -247,28 +272,30 @@ export function drawStanding(g, t, { x, y, size, wind = 1, windDir = 1, tint = n
     }
   });
   // Correa de las gafas alrededor de la cabeza y cajita de pilas.
-  const band = curve([[hx - 120, -922], [hx, -944], [hx + 122, -922], [hx + 120, -900], [hx, -920], [hx - 118, -900]]);
+  const band = curve([[hx - 124, -966], [hx - 70, -944], [hx, -936], [hx + 70, -944], [hx + 126, -966], [hx + 126, -942], [hx + 70, -918], [hx, -910], [hx - 70, -918], [hx - 124, -942]]);
   g.save(); g.clip(hair);
   cel(g, band, C(GIRL.strap), C(sh(GIRL.strap, 0.7)), L, 6, lw2);
-  g.save(); g.setLineDash([8, 7]); line(g, curve([[hx - 116, -911], [hx, -932], [hx + 118, -911]], false), Math.max(1.5, 0.5 / k), C('#c79a6a', 0.9)); g.restore();
+  g.save(); g.setLineDash([8, 7]); line(g, curve([[hx - 120, -952], [hx - 66, -930], [hx, -923], [hx + 66, -930], [hx + 122, -952]], false), Math.max(1.5, 0.5 / k), C('#c79a6a', 0.9)); g.restore();
   g.restore();
-  inked(g, curve([[hx - 132, -940, 1], [hx - 104, -944, 1], [hx - 102, -900, 1], [hx - 130, -896, 1]]), C(mix(GIRL.brass, '#6d5a3a', 0.35)), lw2);
-  // Mechones sueltos al viento.
+  inked(g, curve([[hx - 138, -982, 1], [hx - 108, -986, 1], [hx - 106, -944, 1], [hx - 136, -940, 1]]), C(mix(GIRL.brass, '#6d5a3a', 0.35)), lw2);
+  // Mechones sueltos al viento por el lado de sotavento.
   if (W > 0.05) {
     for (let i = 0; i < 3; i++) {
-      const y0 = -880 + i * 26, x0 = hx + D * 100;
-      const len = (60 + i * 18) * W;
-      const wv = Math.sin(t * 8 + i * 2) * 10 * W;
-      const lock = curve([[x0, y0 - 10], [x0 + D * len * 0.5, y0 - 6 + wv * 0.5], [x0 + D * len, y0 + 4 + wv, 1], [x0 + D * len * 0.45, y0 + 10 + wv * 0.4], [x0 - D * 4, y0 + 16]]);
+      const y0 = -890 + i * 24, x0 = hx + D * 108;
+      const len = (40 + i * 14) * W;
+      const wv = Math.sin(t * 8 + i * 2) * 8 * W;
+      const lock = curve([[x0 - D * 8, y0 - 7], [x0 + D * len * 0.55, y0 - 6 + wv * 0.5], [x0 + D * len, y0 + 2 + wv, 1], [x0 + D * len * 0.5, y0 + 3 + wv * 0.4], [x0 - D * 8, y0 + 6]]);
       cel(g, lock, C(GIRL.hair), null, L, 0, lw2, C(HAIR_INK));
     }
   }
+  g.restore();
 
   // Cola larga de la bufanda (por delante).
   const tail1 = scarfTail(knot[0], knot[1], 1350, t, W, D, 0);
   ribbon(g, tail1, (u) => lerp(72, 56, u), (u) => 0.4 + 1.5 * Math.sin(TAU * (u * 1.25 - t * 0.6)), C(GIRL.scarf), C(GIRL.scarfShade), lw2 * 1.15, C(INK), { fringe: 26 });
-  const knotP = ell(knot[0], knot[1], 30, 24, 0.3 * D);
+  const knotP = curve([[knot[0] - D * 26, knot[1] - 16], [knot[0] + D * 10, knot[1] - 22], [knot[0] + D * 28, knot[1] - 4], [knot[0] + D * 16, knot[1] + 18], [knot[0] - D * 18, knot[1] + 16]]);
   cel(g, knotP, C(GIRL.scarf), C(GIRL.scarfShade), L, 8, lw);
+  taper(g, [[knot[0] - D * 14, knot[1] - 8], [knot[0] + D * 6, knot[1] + 2], [knot[0] + D * 10, knot[1] + 14]], lw2 * 0.8, C(INK), { a: 0.3, b: 0.6 });
   if (rim) {
     for (const p of [hair, vest, shirt, shorts]) crescent(g, p, -L[0] * 8, -L[1] * 8, C(rim));
   }

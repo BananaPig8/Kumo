@@ -259,7 +259,8 @@ export function leafMass(rng, rx, ry, { pal, light = [-0.5, -0.85, 0.45], clumps
 // ─── Islas lejanas ──────────────────────────────────────────────────────────
 // Verde de día más saturado que LEAF (como el prado de la referencia).
 export const LEAF_DAY = { deep: '#1d5328', shade: '#2e7330', mid: '#57a239', lit: '#97cf48', hi: '#d4ef80', trunk: '#5d4232', trunkLit: '#9a7652' };
-export const ROCK_DAY = { deep: '#56506a', shade: '#7c7287', mid: '#a98f78', lit: '#d4b78f', hi: '#eedcb6' };
+// Arenisca cálida con sombras gris azuladas (nada de malva).
+export const ROCK_DAY = { deep: '#6a7181', shade: '#9a9893', mid: '#c2a37c', lit: '#e1c393', hi: '#f5e4bb' };
 
 // Isla flotante pintada: panza de roca como masa (cono invertido de lóbulos
 // alargados, tierra cálida arriba y roca fría abajo), tapa de hierba, labio
@@ -290,7 +291,7 @@ export function paintIsle(rng, w, h, { light = [-0.5, -0.85, 0.45], trees = [], 
   }
   for (let s2 = 0; s2 < 3; s2++) {
     const x0 = cx + (rng() - 0.5) * w * 0.5;
-    const len = h * (0.4 + rng() * 0.4);
+    const len = h * (0.22 + rng() * 0.22);
     for (let i = 0; i < 12; i++) {
       const t = i / 11;
       const r = Math.max(2, w * 0.07 * (1 - t * 0.75));
@@ -300,8 +301,8 @@ export function paintIsle(rng, w, h, { light = [-0.5, -0.85, 0.45], trees = [], 
   const ramp = makeRamp([[0, rock.deep], [0.3, rock.shade], [0.52, rock.mid], [0.72, rock.lit], [0.9, rock.hi]], 2.0);
   const belly = renderMass(cw, ch, puffs, {
     light, ramp, sharpK: 0.16, edgeAmp: 0.18, edgeFreq: 0.06, brushAmp: 0.16, brushFreq: 0.06, brushStretch: 6,
-    ao: 0.6, aoRadius: Math.max(3, w * 0.02), aoRange: Math.max(4, w * 0.03), bump: 1.3, wrap: 0.3, seed,
-    vertical: { top: cy, bottom: cy + h, amount: 0.3 },
+    ao: 0.45, aoRadius: Math.max(3, w * 0.02), aoRange: Math.max(4, w * 0.03), bump: 1.3, wrap: 0.4, seed, toneBias: 0.1,
+    vertical: { top: cy, bottom: cy + h, amount: 0.32 },
   });
   g.drawImage(belly, 0, 0);
   g.save();
@@ -315,7 +316,7 @@ export function paintIsle(rng, w, h, { light = [-0.5, -0.85, 0.45], trees = [], 
   g.fillRect(0, cy, cw, h * 0.25);
   g.restore();
   // Raíces y lianas que cuelgan de la panza.
-  const hang = (xx, yy, len, col, wd) => stroke(g, bez([xx, yy], [xx + (rng() - 0.5) * 6, yy + len * 0.4], [xx + (rng() - 0.5) * 12, yy + len * 0.8], [xx + (rng() - 0.5) * 8, yy + len], 9), { width: wd, color: col, taper: [0.05, 0.9], wobble: 0.25, seed: xx });
+  const hang = (xx, yy, len, col, wd) => stroke(g, bez([xx, yy], [xx + (rng() - 0.5) * len * 0.25, yy + len * 0.4], [xx + (rng() - 0.5) * len * 0.35, yy + len * 0.8], [xx + (rng() - 0.5) * len * 0.3, yy + len], 9), { width: wd, color: col, taper: [0.05, 0.9], wobble: 0.25, seed: xx });
   for (let i = 0; i < Math.round(w / 8); i++) {
     const t = rng();
     const xx = cx + (t - 0.5) * w * 0.92;
@@ -329,7 +330,7 @@ export function paintIsle(rng, w, h, { light = [-0.5, -0.85, 0.45], trees = [], 
   for (let i = 0; i < roots; i++) {
     const t = (i + rng()) / roots;
     const xx = cx + (t - 0.5) * w * 0.8;
-    hang(xx, cy + ry * 0.4, h * (0.5 + rng() * 0.7), mix(leaf.trunk, '#3d2c24', rng() * 0.5), Math.max(1.5, w * (0.01 + rng() * 0.012)));
+    hang(xx, cy + ry * 0.4, h * (0.3 + rng() * 0.45), mix(leaf.trunk, leaf.trunkLit, rng() * 0.5), Math.max(1, w * (0.004 + rng() * 0.005)));
   }
   // Labio colgante de hierba en sombra.
   fillBlob(g, cx, cy + ry * 0.45, w * 0.515, ry * 1.05, grass.dark, 1, { wobble: 0.05, n: 40, seed: seed + 2 });
@@ -398,7 +399,7 @@ export function paintLeafyTree(g, rng, x, y, h, { leaf = LEAF_DAY, light = [-0.5
 // El gran árbol antiguo: tronco grueso y retorcido con contrafuertes, ramas
 // que se abren y una copa ancha en parasol, más ancha que alta.
 export function paintGreatTree(g, rng, x, y, h, { leaf = LEAF_DAY, light = [-0.5, -0.85, 0.45], seed = 1 } = {}) {
-  const tw = h * 0.13, th = h * 0.5;
+  const tw = h * 0.13, th = h * 0.42;
   const pts = bez([x, y], [x - tw * 0.4, y - th * 0.35], [x + tw * 0.5, y - th * 0.7], [x + tw * 0.1, y - th], 12);
   // Contrafuertes que se abren sobre la tapa.
   for (const k of [-1.9, -1.2, -0.6, 0.6, 1.3, 2]) {
@@ -410,12 +411,12 @@ export function paintGreatTree(g, rng, x, y, h, { leaf = LEAF_DAY, light = [-0.5
     const dir = i % 2 ? 1 : -1;
     const t = 0.6 + rng() * 0.35;
     const bx = lerp(x, top[0], t), by = lerp(y, top[1], t);
-    const len = h * (0.3 + rng() * 0.2);
+    const len = h * (0.24 + rng() * 0.16);
     const p2 = bez([bx, by], [bx + dir * len * 0.35, by - len * 0.35], [bx + dir * len * 0.8, by - len * 0.5], [bx + dir * len, by - len * 0.48], 8);
     trunkStroke(g, p2, tw * 0.42, leaf, light, seed + i);
   }
   // Copa en parasol: masas laterales más bajas y una gran cúpula encima.
-  const crowns = [[-0.46, -0.6, 0.3, 0.16], [0.48, -0.58, 0.3, 0.16], [-0.24, -0.72, 0.34, 0.2], [0.26, -0.74, 0.34, 0.2], [0, -0.84, 0.42, 0.22]];
+  const crowns = [[-0.5, -0.5, 0.3, 0.16], [0.52, -0.48, 0.3, 0.16], [-0.26, -0.63, 0.36, 0.22], [0.28, -0.64, 0.36, 0.22], [0, -0.76, 0.46, 0.25]];
   for (const [dx, dy, rx, ry] of crowns) {
     const m = leafMass(rng, h * rx, h * ry, { pal: leaf, light, clumps: Math.round(18 + h * rx / 4), seed: seed + dx * 7 + dy * 3, flatBase: 0.5 });
     drawMass(g, m, top[0] + dx * h, y + dy * h);

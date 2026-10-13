@@ -1057,3 +1057,72 @@ export function paintStreaks(g, rng, x, y, len, angle, { n = 3, color = '#ffffff
     stroke(g, pts, { width: width * (0.6 + rng() * 0.8), color, alpha: alpha * (0.5 + rng() * 0.5), taper: [0.3, 0.6], wobble: 0.3, seed: i });
   }
 }
+
+// Mar de nubes visto desde lo alto, al estilo de la referencia: filas de
+// cúmulos bajos de verdad (cima de coliflor iluminada, base que se deshace)
+// que se hacen pequeños y brumosos hacia el horizonte, sobre un suelo de nube
+// suave. El borde superior se funde con el cielo, sin línea.
+// Devuelve un lienzo w×h; la fila del horizonte queda en y ≈ h * horizon.
+export function cloudSeaBillows(rng, w, h, { pal = CLOUD_DAY, light = [-0.5, -0.85, 0.3], haze = '#bfe3ee', sky = '#a3d8e5', horizon = 0.08, rows = 8, seed = 1, nearScale = 1 } = {}) {
+  const c = makeCanvas(w, h);
+  const g = c.getContext('2d');
+  // Suelo de nube: nace transparente y del color del horizonte, y pasa a un
+  // blanco agrisado frío (las cimas blancas destacan sobre él).
+  const fl = g.createLinearGradient(0, 0, 0, h);
+  fl.addColorStop(0, css(sky, 0));
+  fl.addColorStop(horizon * 1.05, css(sky, 0));
+  fl.addColorStop(Math.min(0.9, horizon * 1.9), css(sky, 0.7));
+  fl.addColorStop(Math.min(0.95, horizon * 3.0), css(mix(sky, pal.mid, 0.55)));
+  fl.addColorStop(1, css(mix(pal.mid, pal.shade, 0.55)));
+  g.fillStyle = fl;
+  g.fillRect(0, 0, w, h);
+  // Juego de cúmulos bajos y anchos (se reutilizan escalados y volteados).
+  const kit = [];
+  for (let i = 0; i < 7; i++) kit.push(cumulusMass(rng, 640, 170 + rng() * 50, { pal, light, tower: 0.25 + rng() * 0.25, seed: seed * 13 + i, levels: 2 }));
+  const bigKit = [];
+  for (let i = 0; i < 3; i++) bigKit.push(cumulusMass(rng, 1000 * nearScale, 300 * nearScale, { pal, light, tower: 0.45, seed: seed * 17 + i, levels: 2 }));
+  const top0 = h * horizon;
+  for (let r = 0; r < rows; r++) {
+    const t = r / (rows - 1);
+    const yy = top0 + Math.pow(t, 1.55) * (h - top0) * 0.98;
+    const cw = lerp(w * 0.07, w * 0.5 * nearScale, Math.pow(t, 1.35));
+    const row = makeCanvas(w, h);
+    const rg = row.getContext('2d');
+    const n = Math.ceil(w / (cw * 0.55)) + 2;
+    // Vistas desde arriba: cuanto más lejos, más aplastadas.
+    const squash = lerp(0.55, 0.9, t);
+    for (let i = 0; i < n; i++) {
+      const useBig = t > 0.7;
+      const m = useBig ? bigKit[Math.floor(rng() * bigKit.length)] : kit[Math.floor(rng() * kit.length)];
+      let k = (cw / (useBig ? 1000 * nearScale : 640)) * (0.8 + rng() * 0.4);
+      const x = (i / (n - 1)) * (w + cw) - cw * 0.5 + (rng() - 0.5) * cw * 0.35;
+      const y = yy + (rng() - 0.5) * cw * 0.05;
+      // Nunca más alta que su distancia al horizonte (no se corta contra el borde).
+      const tall = m.anchor[1] * k * squash;
+      const room = Math.max(4, y - top0 * 0.35);
+      if (tall > room) k *= room / tall;
+      rg.save();
+      rg.translate(x, y);
+      rg.scale(rng() < 0.5 ? -k : k, k * squash);
+      rg.drawImage(m, -m.anchor[0], -m.anchor[1]);
+      rg.restore();
+    }
+    // Perspectiva aérea: cuanto más lejos, más se funde con el horizonte.
+    const hz = Math.pow(1 - t, 2.2) * 0.55;
+    if (hz > 0.01) {
+      rg.globalCompositeOperation = 'source-atop';
+      rg.fillStyle = css(mix(sky, haze, 0.5), hz);
+      rg.fillRect(0, 0, w, h);
+    }
+    g.drawImage(row, 0, 0);
+  }
+  // Velo de bruma sobre la franja del horizonte (nace transparente: sin línea).
+  const v0 = h * horizon * 0.5, vh = h * (horizon + 0.2);
+  const veil = g.createLinearGradient(0, v0, 0, vh);
+  veil.addColorStop(0, css(sky, 0));
+  veil.addColorStop(0.4, css(sky, 0.55));
+  veil.addColorStop(1, css(sky, 0));
+  g.fillStyle = veil;
+  g.fillRect(0, v0, w, vh - v0);
+  return c;
+}

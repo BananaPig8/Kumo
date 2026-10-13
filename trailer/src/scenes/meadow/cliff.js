@@ -4,7 +4,7 @@
 // docs/estilo.png (la referencia del cliente).
 
 import { place } from '../../engine/stage.js';
-import { mulberry32, paintSky, cumulusMass, drawMass, cloudSeaMass, paintMeadow, painterly, bokehFlowers, paintStreaks, applyPaper, paintWaterfall, makeCanvas, fillBlob, css, mix, blade, SKY_DAY, MEADOW_DAY, CLOUD_DAY } from '../../engine/paint.js';
+import { mulberry32, paintSky, cumulusMass, drawMass, cloudSeaBillows, paintMeadow, painterly, bokehFlowers, paintStreaks, applyPaper, paintWaterfall, makeCanvas, fillBlob, css, mix, blade, SKY_DAY, MEADOW_DAY, CLOUD_DAY } from '../../engine/paint.js';
 import { PAL } from '../../engine/style.js';
 import { drawGirlStandingBack } from '../../characters/girl.js';
 import { clamp, lerp, smooth, smoother, invLerp } from '../../lib/util.js';
@@ -35,10 +35,9 @@ const GIRL_Y = farEdge(GIRL_X) + 7;
 
 export async function buildCliff(env) {
   const rng = mulberry32(2307);
-  let __t = performance.now();
-  const TT = (name, c) => { if (c) c.getContext('2d').getImageData(0, 0, 1, 1); const n = performance.now(); console.warn('T', name, Math.round(n - __t)); __t = n; };
 
   // ─── Cielo y cúmulos (profundidad 8) ──────────────────────────────────────
+  const clouds = {};
   const SKX = -40, SKY = -40;
   const sky = makeCanvas(2000, 880);
   {
@@ -48,39 +47,39 @@ export async function buildCliff(env) {
     paintStreaks(g, mulberry32(5), 120 - SKX, 150 - SKY, 900, 0.27, { n: 2, alpha: 0.5, width: 3 });
     paintStreaks(g, mulberry32(6), 40 - SKX, 300 - SKY, 700, 0.21, { n: 2, alpha: 0.35, width: 2.5 });
     painterly(sky, { seed: 9, size: 18, alpha: 0.25, stretch: 3, soften: 1.5, angle: () => 0.1 });
-    const cl = (w, h, o, x, y) => drawMass(g, cumulusMass(rng, w, h, { light: L, pal: CLOUD_DAY, ...o }), x - SKX, y - SKY);
-    cl(440, 290, { tower: 0.8, seed: 9 }, 230, 452);
-    cl(300, 150, { tower: 0.5, seed: 14, haze: 0.22, hazeColor: P.haze }, 760, 446);
-    cl(560, 220, { tower: 0.5, seed: 6 }, 1850, 462);
-    cl(880, 470, { tower: 1.5, seed: 31 }, 1420, 474);
+    const cl = (w, h, o, x, y) => { const m = cumulusMass(rng, w, h, { light: L, pal: CLOUD_DAY, ...o }); drawMass(g, m, x - SKX, y - SKY); return m; };
+    clouds.left = cl(440, 290, { tower: 0.8, seed: 9 }, 230, 452);
+    clouds.small = cl(300, 150, { tower: 0.5, seed: 14, haze: 0.22, hazeColor: P.haze }, 760, 446);
+    clouds.right = cl(560, 220, { tower: 0.5, seed: 6 }, 1850, 462);
+    clouds.big = cl(880, 470, { tower: 1.5, seed: 31 }, 1420, 474);
     // Bruma del horizonte: funde las bases de los cúmulos.
     const hz = g.createLinearGradient(0, 380 - SKY, 0, 470 - SKY);
     hz.addColorStop(0, css(SKY_DAY.bottom, 0)); hz.addColorStop(1, css(SKY_DAY.bottom, 0.85));
     g.fillStyle = hz; g.fillRect(0, 380 - SKY, 2000, 880);
   }
-
-  TT('sky', sky);
   // ─── Mar de nubes (profundidad 4) ─────────────────────────────────────────
-  const SEX = -40, SEY = 428;
-  const sea = cloudSeaMass(rng, 2000, 380, { pal: CLOUD_DAY, light: [-0.5, -0.8, 0.4], haze: P.haze, hazeTop: 0.9, clusters: 300, seed: 7, horizon: 0.0 });
-
-  TT('sea', sea);
+  // El horizonte del mar queda en y ≈ SEY + 360 × 0,22 (margen arriba para que
+  // las cimas de la primera fila no se corten contra el borde del lienzo).
+  const SEX = -40, SEY = 328;
+  const sea = cloudSeaBillows(rng, 2000, 360, { pal: CLOUD_DAY, light: L, haze: P.haze, sky: SKY_DAY.bottom, horizon: 0.22, rows: 9, seed: 7, nearScale: 0.7 });
   // ─── Archipiélago (profundidad 3,2) ───────────────────────────────────────
   const isles = [
     { c: paintIsle(rng, 100, 80, { trees: [{ x: -0.1, dy: 0, h: 46 }], haze: 0.45, hazeColor: P.haze, seed: 3 }), x: 470, y: 356 },
     { c: paintIsle(rng, 70, 56, { trees: [{ x: 0.1, dy: 0, h: 32 }], haze: 0.52, hazeColor: P.haze, seed: 4 }), x: 905, y: 380 },
     { c: paintIsle(rng, 130, 100, { trees: [{ x: -0.35, dy: -0.2, h: 56 }, { x: 0.3, dy: 0.3, h: 42 }], haze: 0.38, hazeColor: P.haze, seed: 5 }), x: 1860, y: 322 },
-    { c: paintIsle(rng, 230, 170, { trees: [{ x: -0.72, dy: 0.25, h: 44 }, { x: 0.05, dy: -0.1, h: 250, big: true }, { x: 0.72, dy: 0.2, h: 50 }], haze: 0.18, hazeColor: P.haze, seed: 6, roots: 8 }), x: 1575, y: 412 },
+    { c: paintIsle(rng, 230, 130, { trees: [{ x: -0.72, dy: 0.25, h: 44 }, { x: 0.05, dy: -0.1, h: 250, big: true }, { x: 0.72, dy: 0.2, h: 50 }], haze: 0.16, hazeColor: P.haze, seed: 6, roots: 12 }), x: 1575, y: 412 },
   ];
 
-  for (const i of isles) i.c.getContext('2d').getImageData(0,0,1,1); TT('isles');
+  // Todas a la misma profundidad: se componen en un solo lienzo.
+  const ISX = 300, ISY = 40;
+  const isleLayer = makeCanvas(1700, 620);
+  for (const is of isles) drawMass(isleLayer.getContext('2d'), is.c, is.x - ISX, is.y - ISY);
   // ─── Nubes cercanas bajo el acantilado (profundidad 2) ────────────────────
   const near = [
-    { c: cumulusMass(rng, 420, 170, { light: L, pal: CLOUD_DAY, tower: 0.4, seed: 42, haze: 0.15, hazeColor: P.haze }), x: 1440, y: 790 },
-    { c: cumulusMass(rng, 760, 260, { light: L, pal: CLOUD_DAY, tower: 0.5, seed: 41 }), x: 1830, y: 820 },
+    { c: cumulusMass(rng, 460, 240, { light: L, pal: CLOUD_DAY, tower: 0.8, seed: 42, haze: 0.12, hazeColor: P.haze }), x: 1470, y: 830 },
+    { c: cumulusMass(rng, 700, 380, { light: L, pal: CLOUD_DAY, tower: 1.0, seed: 41 }), x: 1860, y: 900 },
   ];
 
-  for (const i of near) i.c.getContext('2d').getImageData(0,0,1,1); TT('near');
   // ─── Prado de la isla (profundidad 1) ─────────────────────────────────────
   const MX = -230, MY = 400, MW = 1960, MH = 520;
   const meadowPath = new Path2D();
@@ -105,10 +104,8 @@ export async function buildCliff(env) {
     const fr = [];
     for (let x = MX; x <= TIPX; x += 12) fr.push([x - MX, farEdge(x) - MY]);
     paintMeadow(g, rng, 0, 0, 0, 0, { fringe: fr, pal: MEADOW_DAY, lean: 0.3 });
-    TT('meadow-paint', meadow);
     painterly(meadow, { seed: 4, size: 6, alpha: 0.35, stretch: 1.8, soften: 0.5, density: 0.7 });
   }
-  TT('meadow-painterly', meadow);
 
   // ─── Franjas de hierba alta (ondulan) ─────────────────────────────────────
   // Borde: briznas con la raíz sobre el perfil, más altas cuanto más cerca.
@@ -116,7 +113,6 @@ export async function buildCliff(env) {
   const edgeBase = (x) => edgeY(x + EX) - ETOP;
   const edgeScale = (x) => clamp((edgeY(x + EX) - 380) / 210, 0.45, 2.4);
   const edge = grassStrip(rng, EW, 620, edgeBase, { pal: MEADOW_DAY, count: 520, hMin: 16, hMax: 52, lean: 0.25, fill: false, tuft: 4, scale: edgeScale, flowers: 30, rootJitter: 0.4 });
-  TT('edge', edge.canvas);
   const edgeLit = litCopy(edge);
   // Delante de los pies de la chica.
   const FEX = 1110;
@@ -133,7 +129,6 @@ export async function buildCliff(env) {
     gr.addColorStop(0, 'rgba(10,52,20,0.7)'); gr.addColorStop(0.6, 'rgba(14,66,24,0.25)'); gr.addColorStop(1, 'rgba(14,66,24,0)');
     g.fillStyle = gr; g.fillRect(0, 0, FW, 400);
   }
-  TT('fg', fg.canvas);
   const fgLit = litCopy(fg, '#e8ff9a', 0.35);
   const blades = makeBlades(rng, 160, FX + 40, 1500, (x) => FTOP + fBase(x - FX) + 30, { hMin: 70, hMax: 210, pal: MEADOW_DAY });
   const lipBlades = makeBlades(rng, 70, 1300, 1660, (x) => lipY(x) + 6, { hMin: 24, hMax: 70, pal: MEADOW_DAY });
@@ -141,7 +136,6 @@ export async function buildCliff(env) {
   // Flores grandes desenfocadas (profundidad 0,6), pintadas una vez.
   const bokeh = makeCanvas(820, 560);
   bokehFlowers(bokeh.getContext('2d'), mulberry32(8), 120, 200, 270, 7);
-  TT('bokeh', bokeh);
   const petals = makePetals(rng, 70, { y0: 120, y1: 760, sMin: 3, sMax: 13 });
   const farPetals = makePetals(rng, 50, { y0: 260, y1: 620, sMin: 1.5, sMax: 4 });
 
@@ -149,11 +143,12 @@ export async function buildCliff(env) {
   const gusts = [];
   for (let i = 0; i < 6; i++) gusts.push({ x: rng() * 2400 - 300, y: lerp(500, 760, rng()), r: lerp(220, 420, rng()), v: lerp(220, 320, rng()) });
 
-  return function cliff(f) {
+  const shared = { clouds, near, sea, isles, fg, fgLit, fgBase: fBase, bokeh };
+  return { shared, shot: function cliff(f) {
     const { g, lt, u, post } = f;
     const t = lt;
     Object.assign(post, P.post);
-    post.bloom = 0.35; post.threshold = 0.8; post.vignette = 0.38;
+    post.bloom = 0.22; post.threshold = 0.92; post.vignette = 0.38;
     // La cámara se acerca despacio a la chica.
     const e = smoother(u);
     const zoom = lerp(1.0, 1.11, e);
@@ -163,19 +158,17 @@ export async function buildCliff(env) {
     const at = (d) => { place(g, cam, d); g.translate(-CX, -CY); };
 
     g.imageSmoothingQuality = 'low';
-    let __f = performance.now();
-    const FT = (n) => { g.getImageData(0, 0, 1, 1); const q = performance.now(); console.warn('F', n, Math.round(q - __f)); __f = q; };
-    at(8); g.drawImage(sky, SKX, SKY); FT('sky');
-    at(4); g.drawImage(sea, SEX, SEY); FT('sea');
+    at(8); g.drawImage(sky, SKX, SKY);
+    at(4); g.drawImage(sea, SEX, SEY);
     at(3.2);
-    for (const is of isles) drawMass(g, is.c, is.x, is.y);
+    g.drawImage(isleLayer, ISX, ISY);
     paintWaterfall(g, 1640, 418, 6, 110, t, { seed: 4, alpha: 0.7 });
     paintWaterfall(g, 1840, 326, 4, 56, t, { seed: 5, alpha: 0.55 });
-    FT('isles'); at(2);
+    at(2);
     for (const n of near) drawMass(g, n.c, n.x + Math.sin(t * 0.3) * 4, n.y);
 
     at(1);
-    FT('near'); g.drawImage(meadow, MX, MY); FT('meadow');
+    g.drawImage(meadow, MX, MY);
     // Ráfagas de luz sobre el prado.
     g.save();
     g.translate(MX, MY);
@@ -191,21 +184,22 @@ export async function buildCliff(env) {
       g.restore();
     }
     g.restore();
-    FT('gusts'); drawPetals(g, farPetals, t, { alpha: 0.85 });
-    drawWaving(g, edge, EX, ETOP, t, WIND, edgeLit, { cw: 6 }); FT('edge');
+    drawPetals(g, farPetals, t, { alpha: 0.85 });
+    drawWaving(g, edge, EX, ETOP, t, WIND, edgeLit, { cw: 6 });
     // Sombra de la chica sobre la hierba (luz delante a la izquierda).
     fillBlob(g, GIRL_X + 30, GIRL_Y - 2, 46, 9, '#1f6d22', 0.35, { wobble: 0.2, seed: 2 });
     drawGirlStandingBack(g, t, { x: GIRL_X, y: GIRL_Y, size: 370, wind: 1, windDir: 1 });
     drawWaving(g, feet, FEX, ETOP, t, WIND, null, { cw: 6 });
-    drawBlades(g, lipBlades, t, WIND); FT('girl+feet+lip');
+    drawBlades(g, lipBlades, t, WIND);
 
     at(0.8);
-    drawWaving(g, fg, FX, FTOP, t, WIND, fgLit, { cw: 8 }); FT('fg');
+    drawWaving(g, fg, FX, FTOP, t, WIND, fgLit, { cw: 8 });
     drawBlades(g, blades, t, WIND);
-    FT('blades'); drawPetals(g, petals, t); FT('petals');
+    drawPetals(g, petals, t);
     at(0.6);
-    g.drawImage(bokeh, -150, 520);
+    g.drawImage(bokeh, -120, 400);
     g.setTransform(1, 0, 0, 1, 0, 0);
-    FT('bokeh'); applyPaper(g, env.paper, 0.1); FT('paper');
-  };
+    applyPaper(g, env.paper, 0.1);
+    g.imageSmoothingQuality = 'high';
+  } };
 }

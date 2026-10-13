@@ -202,13 +202,20 @@ export function ribbon(g, pts, wAt, twAt, front, back, lw, ink = INK, { fringe =
     B.push([pts[i][0] + dy * hw, pts[i][1] - dx * hw]);
     face.push(c >= 0);
   }
-  // Relleno por tramos (cara o revés).
-  for (let i = 0; i < n - 1; i++) {
+  // Relleno por tramos de la misma cara (cara o revés), sin costuras.
+  let i0 = 0;
+  for (let i = 1; i < n; i++) {
+    const f0 = face[i0] && face[Math.min(n - 1, i0 + 1)];
+    const fi = i < n - 1 ? face[i] && face[i + 1] : !f0;
+    if (fi === f0 && i < n - 1) continue;
     const q = new Path2D();
-    q.moveTo(A[i][0], A[i][1]); q.lineTo(A[i + 1][0], A[i + 1][1]); q.lineTo(B[i + 1][0], B[i + 1][1]); q.lineTo(B[i][0], B[i][1]); q.closePath();
-    g.fillStyle = face[i] && face[i + 1] ? front : back;
+    q.moveTo(A[i0][0], A[i0][1]);
+    for (let j = i0 + 1; j <= i; j++) q.lineTo(A[j][0], A[j][1]);
+    for (let j = i; j >= i0; j--) q.lineTo(B[j][0], B[j][1]);
+    q.closePath();
+    g.fillStyle = f0 ? front : back;
     g.fill(q);
-    g.strokeStyle = g.fillStyle; g.lineWidth = 0.8; g.stroke(q);
+    i0 = i;
   }
   const ea = new Path2D(), eb = new Path2D();
   ea.moveTo(A[0][0], A[0][1]); eb.moveTo(B[0][0], B[0][1]);

@@ -10,18 +10,21 @@ const CAPTURE = params.has('capture');
 const LAB = params.get('lab');
 if (CAPTURE) document.body.classList.add('capture');
 
-// Cada mundo pinta sus fondos al construirse (una vez) y dibuja sus planos.
-const WORLDS = {
+// Por defecto cada plano usa como fondo la ilustración del cliente (mundo «plates»).
+// Con ?procedural se ve la versión pintada entera por código: cada mundo pinta sus
+// fondos al construirse (una vez) y dibuja sus planos.
+const PROCEDURAL = params.has('procedural');
+const WORLDS = PROCEDURAL ? {
   town: () => import('./scenes/town.js'),
   goggles: () => import('./scenes/goggles.js'),
   nubaria: () => import('./scenes/nubaria.js'),
   meadow: () => import('./scenes/meadow.js'),
   flight: () => import('./scenes/flight.js'),
-};
-const SHOT_WORLD = {
+} : { plates: () => import('./scenes/plates.js') };
+const SHOT_WORLD = PROCEDURAL ? {
   town: 'town', roof: 'town', goggles: 'goggles', tunnel: 'goggles', reveal: 'nubaria', title: 'nubaria',
   cliff: 'meadow', shrine: 'meadow', flyby: 'flight', chase: 'flight', whale: 'flight', airship: 'flight', dive: 'flight',
-};
+} : Object.fromEntries(Object.keys(SHOTS).map((k) => [k, 'plates']));
 
 const canvas = document.getElementById('gl');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, preserveDrawingBuffer: CAPTURE, powerPreference: 'high-performance' });

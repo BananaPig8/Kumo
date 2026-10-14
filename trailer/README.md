@@ -1,6 +1,8 @@
 # Tráiler de *Kumo: Más allá de la lluvia*
 
-Tráiler de 60 s (1080p, 24 fps), pintado y animado al 100 % con código: fondos de gouache sobre lienzo 2D, personajes en acetato y un postprocesado WebGL con bloom, rayos de sol, grano y fundidos. La banda sonora (piano, cuerdas, flauta, coro, arpa, celesta, metales, percusión, lluvia y viento) se sintetiza en código y se renderiza a un búfer que suena igual en la web y en el MP4. No usa imágenes ni sonidos externos.
+Tráiler de 60 s (1080p, 24 fps). Cada plano usa como fondo la ilustración estilo Ghibli que hizo el cliente retocando ese mismo fotograma (`assets/plates/`). Lo que se mueve va recortado en capas y se anima por código encima: cámara, islas que flotan, planeador, ballena, llave, bufanda, hierba, lluvia, faro, cascadas, pájaros, hojas, estelas y destellos, con un postprocesado WebGL con rayos de sol, grano y fundidos. Los rótulos y el título son HTML animado. La banda sonora (piano, cuerdas, flauta, coro, arpa, celesta, metales, percusión, lluvia y viento) se sintetiza en código y se renderiza a un búfer que suena igual en la web y en el MP4.
+
+La versión anterior, pintada entera por código, sigue disponible con `?procedural`.
 
 - Dirección de arte, montaje y contrato técnico: `docs/brief.md`.
 - Estilo aprobado: `docs/estilo.png`.
@@ -16,14 +18,17 @@ node tools/audio.mjs                     # música en out/score.wav con niveles 
 node tools/render.mjs --workers 2        # vídeo final en out/kumo-trailer.mp4
 ```
 
-La versión publicada en la web es la misma página con three.js cargado desde jsDelivr (`three@0.170.0`) en vez de `vendor/`. Al abrirla pinta todos los fondos antes de reproducir (puede tardar un minuto).
+La versión publicada en la web es la misma página con three.js cargado desde jsDelivr (`three@0.170.0`) en vez de `vendor/`. Al abrirla carga los fondos antes de reproducir (unos segundos).
 
 ## Estructura
 
 | Carpeta | Contenido |
 |---|---|
 | `src/engine/` | Escenario multiplano, pinceles (`paint.js`), guía de estilo y paletas (`style.js`) |
-| `src/scenes/` | Un módulo por mundo: `town` (pueblo y tejado), `goggles` (gafas y túnel), `nubaria` (revelación y título), `meadow` (acantilado y santuario), `flight` (pasada, persecución, ballena, dirigible y picado) |
+| `src/scenes/plates.js` | Los 13 planos sobre las ilustraciones del cliente (`plates/meta.js`: cajas de las capas recortadas) |
+| `assets/plates/` | Fondos (sin las capas que se mueven ni el texto pintado) y capas recortadas, en WebP |
+| `tools/plates/` | Preparación de los fondos: `masks.py` (máscaras SAM locales con rembg) y `prep.py` (recortes, rellenos y borrado de texto); las ilustraciones originales van en `out/refs/` |
+| `src/scenes/*` (resto) | Versión pintada por código (`?procedural`): `town`, `goggles`, `nubaria`, `meadow`, `flight` |
 | `src/characters/` | La protagonista, el gato y el planeador, dibujados con trazos vectoriales |
 | `src/audio/` | Partitura y sintetizadores |
 | `src/lab/` | Laboratorios para probar piezas sueltas (`?capture&lab=<nombre>`) |

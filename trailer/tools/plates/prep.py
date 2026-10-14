@@ -22,12 +22,12 @@ SHOTS = {
     'reveal': {'src': 'revelacion', 'layers': ['isle', 'left']},
     'cliff': {'src': 'acantilado', 'layers': ['scarf'], 'text': [[615, 640, 1315, 722, 'white', 7]]},
     'shrine': {'src': 'santuario', 'layers': ['key', 'fg'], 'keep': ['fg']},
-    'flyby': {'src': 'pasada', 'layers': ['glider']},
+    'flyby': {'src': 'pasada', 'layers': ['glider'], 'patch': {'layer': 'glider', 'dy': 235}},
     'chase': {'src': 'persecucion', 'layers': ['glider']},
     'whale': {'src': 'ballena', 'layers': ['whale', 'glider']},
     'airship': {'src': 'dirigible', 'layers': ['glider'], 'text': [[675, 645, 1268, 712, 'white', 7]]},
     'dive': {'src': 'picado', 'layers': ['glider'], 'patch': {'layer': 'glider', 'dx': 580}},
-    'title': {'src': 'titulo', 'layers': ['isle'],
+    'title': {'src': 'titulo', 'layers': ['isle'], 'smooth_text': True,
               'text': [[905, 105, 1015, 215, 'gold', 10], [625, 212, 1360, 378, 'white', 16], [620, 378, 1340, 432, 'white', 8], [680, 562, 1270, 628, 'white', 8]]},
 }
 
@@ -92,14 +92,28 @@ for shot, cfg in SHOTS.items():
         rgba = np.dstack([rgb, a])[y0:y1, x0:x1]
         Image.fromarray(rgba, 'RGBA').save(OUT + f'{shot}-{name}.webp', quality=92, alpha_quality=100, method=6)
         layers[name] = {'x': int(x0), 'y': int(y0), 'w': int(x1 - x0), 'h': int(y1 - y0)}
-    if 'text' in cfg:
-        hole |= text_mask(rgb, cfg['text'])
     bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+    if 'text' in cfg:
+        tm = text_mask(rgb, cfg['text'])
+        if cfg.get('smooth_text'):
+            # Cielo: relleno suave (convolución normalizada) más la textura de pincel de al lado,
+            # en vez de las manchas radiales del relleno por difusión.
+            keep = (~tm).astype(np.float32)
+            f = bgr.astype(np.float32)
+            num = cv2.GaussianBlur(f * keep[..., None], (0, 0), 22)
+            den = cv2.GaussianBlur(keep, (0, 0), 22)[..., None]
+            fill = num / np.maximum(den, 1e-4)
+            grain = np.random.default_rng(7).normal(0, 2.2, f.shape[:2]).astype(np.float32)[..., None]
+            out = np.clip(fill + cv2.GaussianBlur(grain, (0, 0), 0.8)[..., None] if grain.ndim == 2 else fill + grain, 0, 255)
+            soft = cv2.GaussianBlur(tm.astype(np.float32), (0, 0), 2)[..., None]
+            bgr = (f * (1 - soft) + out * soft).astype(np.uint8)
+        else:
+            hole |= tm
     if 'patch' in cfg:
         # Hueco grande (el planeador se aleja): se rellena con nubes de al lado (clonado de Poisson).
         p = cfg['patch']
         pm = cv2.dilate(masks[p['layer']].astype(np.uint8), disk(16))
-        shifted = np.roll(bgr, -p['dx'], axis=1)
+        shifted = np.roll(np.roll(bgr, -p.get('dx', 0), axis=1), -p.get('dy', 0), axis=0)
         ys, xs = np.nonzero(pm)
         c = (int((xs.min() + xs.max()) / 2), int((ys.min() + ys.max()) / 2))
         bgr = cv2.seamlessClone(shifted, bgr, pm * 255, c, cv2.NORMAL_CLONE)
